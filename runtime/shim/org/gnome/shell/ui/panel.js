@@ -30,7 +30,7 @@ class TopBarBox extends St.BoxLayout {
 
     _gnoshUnpack(child) {
         const box = bridge()?.statusBox;
-        const w = child._outer;
+        const w = child._gnoshOuter;
         if (!w)
             return;
         if (box && w.get_parent() && w.get_parent() !== box)
@@ -166,6 +166,9 @@ class Panel extends St.BoxLayout {
     }
 
     _gnoshChildAdded(child) {
+        // Remember which extension added an actor to the top bar.
+        const actor = child instanceof St.Bin && child.child ? child.child : child;
+        actor._gnoshExt ??= bridge()?.callerExtension() ?? null;
         const indicator = this._gnoshIndicatorFor(child);
         if (indicator && !indicator._gnoshBuiltin)
             bridge()?.addIndicator(indicator);

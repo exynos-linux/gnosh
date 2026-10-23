@@ -1,0 +1,17 @@
+{
+  "_comment": "Distribution support. status: tested | expected | experimental | unknown. Sources: package indexes as of 2026-10 (see README).",
+  "distros": [
+    {"name": "postmarketOS / Nura edge (systemd)", "phosh": "0.58", "gjs": "1.90", "unit": "mobi.phosh.Shell.service", "status": "tested", "notes": "Headless and nested Phosh in the test container (CI runs it on every push)."},
+    {"name": "postmarketOS / Nura v26.06 (systemd)", "phosh": "0.55", "gjs": "1.88", "unit": "mobi.phosh.Shell.service", "status": "expected", "notes": ""},
+    {"name": "postmarketOS v25.12 (systemd)", "phosh": "0.51", "gjs": "1.86", "unit": "mobi.phosh.Shell.service", "status": "expected", "notes": ""},
+    {"name": "postmarketOS with OpenRC", "phosh": "0.51–0.58", "gjs": "1.86–1.90", "unit": "mobi.phosh.Shell.desktop (gnome-session 48)", "status": "experimental", "notes": "gnosh writes a user override of mobi.phosh.Shell.desktop instead of a systemd drop-in; untested."},
+    {"name": "Debian 13 trixie / Mobian trixie", "phosh": "0.46", "gjs": "1.82", "unit": "mobi.phosh.Shell.service", "status": "expected", "notes": "Needs libglib2.0-bin for glib-compile-schemas."},
+    {"name": "Debian forky, sid / Mobian staging", "phosh": "0.58", "gjs": "1.90", "unit": "mobi.phosh.Shell.service", "status": "expected", "notes": ""},
+    {"name": "Fedora 43, 44, rawhide", "phosh": "0.54–0.57", "gjs": "1.86–1.90", "unit": "mobi.phosh.Shell.service", "status": "expected", "notes": ""},
+    {"name": "Arch Linux ARM", "phosh": "0.57", "gjs": "1.90", "unit": "mobi.phosh.Shell.service", "status": "expected", "notes": ""},
+    {"name": "Ubuntu 26.04", "phosh": "0.54", "gjs": "1.88", "unit": "mobi.phosh.Shell.service", "status": "expected", "notes": ""},
+    {"name": "Manjaro ARM stable", "phosh": "0.37", "gjs": "1.78", "unit": "sm.puri.Phosh.service", "status": "unknown", "notes": "Old gjs; GNOME 50's JS may use newer language features."},
+    {"name": "PureOS 11 crimson", "phosh": "0.34", "gjs": "1.74", "unit": "sm.puri.Phosh.service", "status": "unknown", "notes": "Old gjs and Phosh."},
+    {"name": "openSUSE Tumbleweed", "phosh": "—", "gjs": "1.88", "unit": "—", "status": "unsupported", "notes": "Does not package Phosh."}
+  ]
+}

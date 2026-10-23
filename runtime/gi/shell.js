@@ -28,7 +28,7 @@ export const App = GObject.registerClass({
     Signals: {'windows-changed': {}},
 }, class App extends GObject.Object {
     _init(appInfo) {
-        this._p = {};
+        this._gnoshP = {};
         super._init();
         this._info = appInfo;
     }

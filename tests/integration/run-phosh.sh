@@ -53,10 +53,11 @@ list=$(printf "'%s'," $EXTENSIONS | sed 's/,$//')
 gsettings set org.gnome.shell enabled-extensions "[$list]"
 gsettings set org.gnome.shell disable-user-extensions false
 
+# D-Bus activated services (e.g. GSConnect's daemon) need the display;
+# phoc creates wayland-0 in the fresh runtime dir.
+dbus-update-activation-environment WAYLAND_DISPLAY=wayland-0 XDG_CURRENT_DESKTOP >/dev/null 2>&1
 phoc -C /tmp/phoc.ini -E "/usr/libexec/phosh -U" > "$OUT/phosh.log" 2>&1 &
 phoc_pid=$!
-# D-Bus activated services (e.g. GSConnect's daemon) need the display.
-( sleep 2; dbus-update-activation-environment WAYLAND_DISPLAY=wayland-0 XDG_CURRENT_DESKTOP ) >/dev/null 2>&1 &
 
 gnosh() {
     method=$1; shift

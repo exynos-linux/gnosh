@@ -102,6 +102,17 @@ function menuHasSettingsItem(actor) {
     return visit(actor);
 }
 
+function callerExtensionOf(actor, manager) {
+    // SystemIndicators are added through addExternalIndicator(); find the
+    // extension through the quick settings items it owns.
+    for (const item of actor.quickSettingsItems ?? []) {
+        if (item._gnoshExt)
+            return item._gnoshExt;
+    }
+    void manager;
+    return null;
+}
+
 /** Find the first St.Icon in an actor tree. */
 function findIcon(actor, St) {
     if (!actor)
@@ -319,6 +330,10 @@ export class Bridge {
 
     // --- top bar ---
 
+    callerExtension() {
+        return callerExtension(this.extensionManager);
+    }
+
     get statusBox() {
         return this._statusBox;
     }
@@ -389,7 +404,7 @@ export class Bridge {
         this._tiles.set(indicator, entry);
 
         if (hasMenu) {
-            tile.setPage(this._indicatorLabel(indicator), menu.actor._outer, this._prefsFooter(indicator._gnoshExt));
+            tile.setPage(this._indicatorLabel(indicator), menu.actor._gnoshOuter, this._prefsFooter(indicator._gnoshExt));
             menu.actor.show();
             entry.ids.push([menu, menu.connect('open-state-changed', (m, open) => {
                 if (open)
@@ -519,7 +534,7 @@ export class Bridge {
             // QuickToggleMenu animates its own height; show it fully.
             menu.actor.height = -1;
             menu.actor.show();
-            tile.setPage(titleOf(), menu.actor._outer, this._prefsFooter(ext));
+            tile.setPage(titleOf(), menu.actor._gnoshOuter, this._prefsFooter(ext));
             entry.ids.push([menu, menu.connect('open-state-changed', (m, open) => {
                 menu.actor.height = -1;
                 menu.actor.show();
@@ -533,7 +548,7 @@ export class Bridge {
             const holder = new imports.gi.St.BoxLayout({vertical: true});
             item.get_parent()?.remove_child(item);
             holder.add_child(item);
-            tile.setPage(titleOf(), holder._outer, this._prefsFooter(ext));
+            tile.setPage(titleOf(), holder._gnoshOuter, this._prefsFooter(ext));
             entry.holder = holder;
         }
         const sync = () => {
@@ -567,7 +582,7 @@ export class Bridge {
         });
         item.get_parent()?.remove_child(item);
         box.add_child(item);
-        tile.setPage(label, box._outer, this._prefsFooter(ext));
+        tile.setPage(label, box._gnoshOuter, this._prefsFooter(ext));
         if (item.gicon || iconName)
             tile.setIcon(item.gicon ?? Gio.ThemedIcon.new(iconName));
         const entry = {tile, ids: [], holder: box};
@@ -596,6 +611,35 @@ export class Bridge {
             visible: e.tile._qs.visible,
             hasPage: Boolean(e.tile._page),
         }));
+    }
+
+    /** Extension indicators packed into Phosh's top bar. */
+    listTopbar() {
+        const panel = this._panel;
+        if (!panel)
+            return [];
+        const out = [];
+        const St = this._St();
+        const describe = (actor, ext) => ({
+            uuid: ext?.uuid ?? null,
+            type: actor.constructor.name,
+            visible: Boolean(actor.visible && actor.mapped !== false),
+            text: findLabelText(actor, St),
+            icon: findIcon(actor, St)?.icon_name ?? (findIcon(actor, St) ? 'gicon' : null),
+        });
+        for (const box of [panel._leftBox, panel._centerBox, panel._rightBox]) {
+            for (const container of box.get_children()) {
+                const actor = container.child ?? container;
+                if (actor._gnoshBuiltin) {
+                    // quick settings indicator box: extension SystemIndicators
+                    for (const ind of actor._indicators?.get_children() ?? [])
+                        out.push(describe(ind, ind._gnoshExt ?? callerExtensionOf(ind, this.extensionManager)));
+                    continue;
+                }
+                out.push(describe(actor, actor._gnoshExt));
+            }
+        }
+        return out;
     }
 
     // --- lock state and windows ---

@@ -1,0 +1,74 @@
+<!-- title: gnosh: GNOME Shell extensions in Phosh -->
+<section class="hero">
+  <div>
+    <h1>GNOME Shell extensions, in Phosh.</h1>
+    <p class="lead">gnosh runs GNOME Shell extensions inside <a href="https://phosh.mobi">Phosh</a>, the GNOME mobile shell.
+      Indicators land in Phosh's top bar; their menus, toggles and sliders become native quick settings tiles;
+      dialogs and notifications are Phosh's own. Preferences, Extension Manager and <code>gext</code> work as on GNOME.</p>
+    <a class="btn" href="#install">Install</a>
+    <a class="btn secondary" href="compatibility.html">Tested extensions</a>
+    <a class="btn secondary" href="https://github.com/dixonSolutions/gnosh">Source</a>
+    <p class="small">Version {{version}} · GPL-3.0-or-later · Phosh only: it does nothing in GNOME, KDE or other desktops.</p>
+  </div>
+  <div class="shots">
+    <img src="img/drawer.png" alt="GNOME Shell extensions as Phosh quick settings tiles">
+    <img src="img/caffeine-menu.png" alt="Caffeine's menu in a Phosh status page">
+  </div>
+</section>
+
+<h2 id="install">Install</h2>
+<div class="install">
+  <p>In a Phosh session (or over ssh as the Phosh user):</p>
+  <pre><code>curl -fsSL https://raw.githubusercontent.com/dixonSolutions/gnosh/main/setup.sh | sh</code></pre>
+  <p>or from git:</p>
+  <pre><code>git clone https://github.com/dixonSolutions/gnosh
+cd gnosh &amp;&amp; ./setup.sh</code></pre>
+  <p>Then log out and back in. Everything goes into your home directory (<code>~/.local</code>, <code>~/.config</code>,
+    <code>flatpak --user</code>), so it works on immutable systems without root. <code>setup.sh</code> also installs
+    <a href="https://github.com/mjakeman/extension-manager">Extension Manager</a> and
+    <a href="https://github.com/essembeh/gnome-extensions-cli">gnome-extensions-cli</a>, and enables daily updates.</p>
+</div>
+
+<pre><code>gnosh install clipboard-indicator@tudmotu.com    # uuid, extensions.gnome.org URL, search term or .zip
+gnosh install caffeine
+gnosh list -v
+gnosh prefs caffeine@patapon.info
+gnosh doctor</code></pre>
+
+<h2>What you get</h2>
+<div class="grid">
+  <div class="card"><h3>Top bar indicators</h3><p>Panel buttons (System Monitor, Vitals, Lock Keys, Executor, …) show in Phosh's status area.</p></div>
+  <div class="card"><h3>Menus as status pages</h3><p>Every indicator menu opens in a native Phosh quick settings page. It's GNOME's own popup menu code running on gnosh's St.</p></div>
+  <div class="card"><h3>Quick toggles</h3><p>QuickToggle and QuickMenuToggle (Caffeine, GSConnect, …) become Phosh tiles that reflect their on/off state.</p></div>
+  <div class="card"><h3>Dialogs and notifications</h3><p>ModalDialog uses Phosh's system dialog, MessageTray uses Phosh's notifications (with actions), and OSD uses Phosh's OSD.</p></div>
+  <div class="card"><h3>Preferences</h3><p>Each extension's own prefs.js runs unchanged in an adaptive libadwaita window.</p></div>
+  <div class="card"><h3>Managed like on GNOME</h3><p><code>org.gnome.Shell.Extensions</code> D-Bus API: Extension Manager, gext and gnome-extensions just work. Installs load live.</p></div>
+</div>
+
+<h2>Screenshots</h2>
+<p class="small">Unmodified extensions from extensions.gnome.org, in Phosh 0.58 (postmarketOS edge).</p>
+<div class="gallery">
+  <figure><img src="img/places-menu.png" alt=""><figcaption>Places Status Indicator</figcaption></figure>
+  <figure><img src="img/page-vitals.png" alt=""><figcaption>Vitals</figcaption></figure>
+  <figure><img src="img/page-clipboard-indicator.png" alt=""><figcaption>Clipboard Indicator</figcaption></figure>
+  <figure><img src="img/page-emoji-copy.png" alt=""><figcaption>Emoji Copy</figcaption></figure>
+  <figure><img src="img/page-system-monitor.png" alt=""><figcaption>System Monitor</figcaption></figure>
+  <figure><img src="img/page-lockkeys.png" alt=""><figcaption>Lock Keys</figcaption></figure>
+  <figure><img src="img/dialog-notification.png" alt=""><figcaption>Extension dialog and notification</figcaption></figure>
+  <figure><img src="img/prefs.png" alt=""><figcaption>Extension preferences</figcaption></figure>
+</div>
+
+<h2>How it works</h2>
+<p>GNOME Shell extensions are JavaScript that runs inside gnome-shell and uses its private toolkits (St, Clutter, Meta, Shell)
+  and UI modules. Phosh is a different shell written in C and GTK 3. gnosh brings the missing parts to Phosh:</p>
+<div class="diagram"><pre>phosh process (stock /usr/libexec/phosh, started with GTK_MODULES=libgnosh-phosh.so)
+ ├─ libgnosh-phosh.so ─ loads libgjs, runs the gnosh runtime
+ ├─ extension.js, stylesheet.css (unchanged)
+ │    imports resource:///org/gnome/shell/ui/…  gi://St  gi://Clutter …
+ ├─ GNOME Shell 50's own JS (popupMenu, panelMenu, quickSettings, extensionSystem)
+ │    + gnosh's main.js, panel.js, messageTray.js, modalDialog.js, …
+ ├─ St / Clutter / Meta / Shell implemented on GTK 3
+ └─ bridge → Phosh top bar · PhoshQuickSetting tiles · PhoshStatusPage
+             PhoshSystemModalDialog · notifications · OSD · accelerators
+D-Bus: org.gnome.Shell.Extensions (Extension Manager, gext) · io.github.dixonsolutions.Gnosh (gnosh CLI)</pre></div>
+<p>Read more in the <a href="docs.html">documentation</a>, including what does <em>not</em> work and why.</p>

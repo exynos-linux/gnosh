@@ -187,6 +187,7 @@ class GnoshService {
             unsafe: Boolean(globalThis.__gnosh.unsafe),
             extensions,
             tiles: this._ctx.bridge.listTiles(),
+            topbar: this._ctx.bridge.listTopbar(),
             uptime: Math.round((GLib.get_monotonic_time() - globalThis.__gnosh.startTime) / 1e6),
         });
     }

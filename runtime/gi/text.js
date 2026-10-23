@@ -49,21 +49,21 @@ export const Text = GObject.registerClass({
     },
 }, class Text extends Actor {
     _init(params = {}) {
-        this._wrapped = params?._gnoshWidget ?? null;
+        this._gnoshWrapped = params?._gnoshWidget ?? null;
         if (params)
             delete params._gnoshWidget;
         super._init(params);
     }
 
     _gnoshEnsureWidget() {
-        if (!this._wrapped) {
+        if (!this._gnoshWrapped) {
             super._gnoshEnsureWidget();
-            this._gnoshConnectWidget(this._inner);
+            this._gnoshConnectWidget(this._gnoshInner);
             return;
         }
         // A wrapped widget belongs to the St.Label/St.Entry that created us.
-        this._inner = this._outer = this._wrapped;
-        this._gnoshConnectWidget(this._wrapped);
+        this._gnoshInner = this._gnoshOuter = this._gnoshWrapped;
+        this._gnoshConnectWidget(this._gnoshWrapped);
         this._gnoshSyncAll();
     }
 
@@ -76,7 +76,7 @@ export const Text = GObject.registerClass({
     }
 
     get _isEntry() {
-        return this._inner instanceof Gtk.Entry;
+        return this._gnoshInner instanceof Gtk.Entry;
     }
 
     _gnoshConnectWidget(w) {
@@ -128,13 +128,13 @@ export const Text = GObject.registerClass({
 
     _propChanged(key, value) {
         super._propChanged(key, value);
-        const w = this._inner;
+        const w = this._gnoshInner;
         if (!w)
             return;
         if (w instanceof Gtk.Label) {
             switch (key) {
             case 'use_markup':
-                this._gnoshSetLabelText(this._p.text ?? w.get_text());
+                this._gnoshSetLabelText(this._gnoshP.text ?? w.get_text());
                 break;
             case 'ellipsize':
                 w.ellipsize = value;
@@ -186,10 +186,10 @@ export const Text = GObject.registerClass({
     }
 
     _gnoshCss(css) {
-        this._cssProvider ??= new Gtk.CssProvider();
+        this._gnoshCssProvider ??= new Gtk.CssProvider();
         try {
-            this._cssProvider.load_from_data(`* { ${css} }`);
-            this._inner.get_style_context().add_provider(this._cssProvider, Gtk.STYLE_PROVIDER_PRIORITY_USER + 1);
+            this._gnoshCssProvider.load_from_data(`* { ${css} }`);
+            this._gnoshInner.get_style_context().add_provider(this._gnoshCssProvider, Gtk.STYLE_PROVIDER_PRIORITY_USER + 1);
         } catch {
             // ignore unparsable colors
         }
@@ -210,17 +210,17 @@ export const Text = GObject.registerClass({
     }
 
     _gnoshSetLabelText(text) {
-        const w = this._inner;
-        if (this._p.use_markup)
+        const w = this._gnoshInner;
+        if (this._gnoshP.use_markup)
             w.set_markup(text ?? '');
         else
             w.set_text(text ?? '');
     }
 
     get text() {
-        if (!this._inner)
-            return this._p.text ?? '';
-        return this._isEntry ? this._inner.get_text() : this._p.text ?? this._inner.get_text();
+        if (!this._gnoshInner)
+            return this._gnoshP.text ?? '';
+        return this._gnoshIsEntry ? this._gnoshInner.get_text() : this._gnoshP.text ?? this._gnoshInner.get_text();
     }
 
     set text(value) {
@@ -230,11 +230,11 @@ export const Text = GObject.registerClass({
     set_text(text) {
         text = text === null || text === undefined ? '' : String(text);
         const changed = text !== this.text;
-        this._p.text = text;
-        if (this._inner) {
-            if (this._isEntry) {
-                if (this._inner.get_text() !== text)
-                    this._inner.set_text(text);
+        this._gnoshP.text = text;
+        if (this._gnoshInner) {
+            if (this._gnoshIsEntry) {
+                if (this._gnoshInner.get_text() !== text)
+                    this._gnoshInner.set_text(text);
                 return;
             }
             this._gnoshSetLabelText(text);
@@ -251,14 +251,14 @@ export const Text = GObject.registerClass({
     }
 
     set_markup(markup) {
-        this._p.use_markup = true;
+        this._gnoshP.use_markup = true;
         this.set_text(markup);
     }
 
     get_layout() {
-        if (this._inner instanceof Gtk.Label)
-            return this._inner.get_layout();
-        return this._inner?.get_layout?.() ?? null;
+        if (this._gnoshInner instanceof Gtk.Label)
+            return this._gnoshInner.get_layout();
+        return this._gnoshInner?.get_layout?.() ?? null;
     }
 
     get_layout_offsets() {
@@ -266,7 +266,7 @@ export const Text = GObject.registerClass({
     }
 
     get position() {
-        return this._isEntry ? this._inner.get_position() : -1;
+        return this._gnoshIsEntry ? this._gnoshInner.get_position() : -1;
     }
 
     set position(p) {
@@ -278,31 +278,31 @@ export const Text = GObject.registerClass({
     }
 
     set_cursor_position(p) {
-        if (this._isEntry)
-            this._inner.set_position(p);
+        if (this._gnoshIsEntry)
+            this._gnoshInner.set_position(p);
     }
 
     get selection_bound() {
-        if (!this._isEntry)
+        if (!this._gnoshIsEntry)
             return -1;
-        const [ok, , end] = this._inner.get_selection_bounds();
+        const [ok, , end] = this._gnoshInner.get_selection_bounds();
         return ok ? end : this.position;
     }
 
     set_selection(start, end) {
-        if (this._isEntry)
-            this._inner.select_region(start, end);
+        if (this._gnoshIsEntry)
+            this._gnoshInner.select_region(start, end);
     }
 
     set_selection_bound(bound) {
-        if (this._isEntry)
-            this._inner.select_region(this.position, bound);
+        if (this._gnoshIsEntry)
+            this._gnoshInner.select_region(this.position, bound);
     }
 
     get_selection() {
-        if (!this._isEntry)
+        if (!this._gnoshIsEntry)
             return null;
-        const [ok, start, end] = this._inner.get_selection_bounds();
+        const [ok, start, end] = this._gnoshInner.get_selection_bounds();
         return ok ? this.text.slice(start, end) : null;
     }
 
@@ -311,8 +311,8 @@ export const Text = GObject.registerClass({
     }
 
     insert_text(text, position) {
-        if (this._isEntry) {
-            this._inner.insert_text(text, -1, position < 0 ? this.text.length : position);
+        if (this._gnoshIsEntry) {
+            this._gnoshInner.insert_text(text, -1, position < 0 ? this.text.length : position);
             return;
         }
         const t = this.text;
@@ -325,8 +325,8 @@ export const Text = GObject.registerClass({
     }
 
     delete_text(start, end) {
-        if (this._isEntry) {
-            this._inner.delete_text(start, end);
+        if (this._gnoshIsEntry) {
+            this._gnoshInner.delete_text(start, end);
             return;
         }
         const t = this.text;
@@ -339,9 +339,9 @@ export const Text = GObject.registerClass({
     }
 
     delete_selection() {
-        if (!this._isEntry)
+        if (!this._gnoshIsEntry)
             return false;
-        this._inner.delete_selection();
+        this._gnoshInner.delete_selection();
         return true;
     }
 
@@ -487,15 +487,15 @@ export const Text = GObject.registerClass({
     }
 
     grab_key_focus() {
-        this._inner?.grab_focus();
+        this._gnoshInner?.grab_focus();
     }
 
     destroy() {
-        if (this._wrapped) {
+        if (this._gnoshWrapped) {
             // The owner destroys the widget.
-            if (this._destroyed)
+            if (this._gnoshDestroyed)
                 return;
-            this._destroyed = true;
+            this._gnoshDestroyed = true;
             this.emit('destroy');
             return;
         }

@@ -4,7 +4,7 @@ FROM gitlab.postmarketos.org:5050/postmarketos/docker-postmarketos:edge
 ENTRYPOINT []
 RUN apk update && apk add --no-cache \
       phosh libphosh phoc gjs gtk4.0 libadwaita gnome-shell-extensions \
-      networkmanager gnome-bluetooth \
+      networkmanager gnome-bluetooth gnome-menus openssl \
       dbus dbus-x11 dconf python3 py3-pip pipx git curl unzip shellcheck \
       wl-clipboard grim adwaita-icon-theme font-cantarell font-dejavu \
       mesa-dri-gallium bash sudo jq glib-dev \

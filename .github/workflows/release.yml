@@ -1,0 +1,45 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to (re)build, e.g. v0.1.0'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+      - name: Cross compilers
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq gcc-aarch64-linux-gnu gcc-arm-linux-gnueabihf gcc-riscv64-linux-gnu
+      - name: Check version
+        run: |
+          tag="${{ github.event.inputs.tag || github.ref_name }}"
+          test "v$(cat VERSION)" = "$tag" || { echo "VERSION ($(cat VERSION)) does not match tag $tag"; exit 1; }
+      - name: Build release archive
+        run: |
+          make dist
+          v=$(cat VERSION)
+          cp build/gnosh-$v.tar.gz build/gnosh.tar.gz
+          (cd build && sha256sum gnosh.tar.gz > gnosh.tar.gz.sha256)
+          cp setup.sh build/setup.sh
+          tools/release-notes.py "$v" > build/notes.md
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v=$(cat VERSION)
+          gh release view "v$v" >/dev/null 2>&1 && gh release delete "v$v" --yes --cleanup-tag=false
+          gh release create "v$v" --title "gnosh $v" --notes-file build/notes.md \
+            build/gnosh-$v.tar.gz build/gnosh-$v.tar.gz.sha256 build/gnosh.tar.gz build/gnosh.tar.gz.sha256 build/setup.sh

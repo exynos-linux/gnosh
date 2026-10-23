@@ -189,7 +189,7 @@ export const Window = GObject.registerClass({
     },
 }, class Window extends GObject.Object {
     _init(activity) {
-        this._p = {};
+        this._gnoshP = {};
         super._init();
         this._gnoshConstructed = true;
         this._activity = activity;
@@ -425,7 +425,7 @@ export const Workspace = GObject.registerClass({
     Signals: {'window-added': {param_types: [Window]}, 'window-removed': {param_types: [Window]}},
 }, class Workspace extends GObject.Object {
     _init(manager) {
-        this._p = {};
+        this._gnoshP = {};
         super._init();
         this._manager = manager;
     }
@@ -475,7 +475,7 @@ export const WorkspaceManager = GObject.registerClass({
     },
 }, class WorkspaceManager extends GObject.Object {
     _init() {
-        this._p = {};
+        this._gnoshP = {};
         super._init();
         this._workspace = new Workspace(this);
     }
@@ -559,7 +559,7 @@ export const Display = GObject.registerClass({
     },
 }, class Display extends GObject.Object {
     _init() {
-        this._p = {};
+        this._gnoshP = {};
         super._init();
         this._gnoshConstructed = true;
         this._selection = null;

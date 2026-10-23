@@ -155,14 +155,36 @@ def gdbus_call(dest, path, method, *args, timeout=25):
     return res.stdout.strip(), None
 
 
+_ESCAPES = {"n": "\n", "t": "\t", "r": "\r", "b": "\b", "f": "\f", "v": "\v", "a": "\a",
+            "\\": "\\", "'": "'", '"': '"'}
+
+
 def parse_gvariant_string(out):
     """('...',) -> str. gdbus prints GVariant text; decode the string literal."""
     m = re.match(r"^\((['\"])(.*)\1,?\)$", out, re.S)
     if not m:
         return out
-    body = m.group(2)
-    # GVariant text escapes are close to Python's
-    return bytes(body, "utf-8").decode("unicode_escape").encode("latin-1").decode("utf-8")
+    body, res, i = m.group(2), [], 0
+    while i < len(body):
+        ch = body[i]
+        if ch != "\\" or i + 1 >= len(body):
+            res.append(ch)
+            i += 1
+            continue
+        nxt = body[i + 1]
+        if nxt in _ESCAPES:
+            res.append(_ESCAPES[nxt])
+            i += 2
+        elif nxt == "u":
+            res.append(chr(int(body[i + 2:i + 6], 16)))
+            i += 6
+        elif nxt == "U":
+            res.append(chr(int(body[i + 2:i + 10], 16)))
+            i += 10
+        else:
+            res.append(nxt)
+            i += 2
+    return "".join(res)
 
 
 def runtime_status():

@@ -77,7 +77,7 @@ export const ModalDialog = GObject.registerClass({
         const dialog = GObject.Object.new_with_properties(type, ['title'], ['']);
         const builder = new Gtk.Builder();
         // Content: the St content layout, unparented from the St dialog box.
-        const content = this.contentLayout._outer;
+        const content = this.contentLayout._gnoshOuter;
         content.get_parent()?.remove(content);
         content.show();
         dialog.add_child(builder, content, 'phosh-dialog-content');
@@ -136,7 +136,7 @@ export const ModalDialog = GObject.registerClass({
         this._phoshDialog = null;
         if (dialog) {
             // Give the content back before the dialog widget goes away.
-            const content = this.contentLayout._outer;
+            const content = this.contentLayout._gnoshOuter;
             content.get_parent()?.remove(content);
             dialog.destroy();
         }

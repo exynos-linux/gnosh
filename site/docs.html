@@ -1,0 +1,78 @@
+<!-- title: Documentation · gnosh -->
+<h1>Documentation</h1>
+
+<h2 id="install">Installing</h2>
+<pre><code>curl -fsSL https://raw.githubusercontent.com/dixonSolutions/gnosh/main/setup.sh | sh   # latest release
+./setup.sh                      # from a git checkout
+./setup.sh --version 0.1.0      # a specific release
+./setup.sh --no-extension-manager --no-gext --no-auto-update
+./setup.sh --uninstall          # keeps extensions and settings</code></pre>
+<p>What gets installed (all in your home directory):</p>
+<table>
+<tr><th>Path</th><th>What</th></tr>
+<tr><td><code>~/.local/bin/gnosh</code></td><td>the command</td></tr>
+<tr><td><code>~/.local/share/gnosh/runtime/</code></td><td>the runtime (JavaScript)</td></tr>
+<tr><td><code>~/.local/lib/gnosh/libgnosh-phosh.so</code></td><td>the GTK module that starts gnosh inside Phosh</td></tr>
+<tr><td><code>~/.config/systemd/user/mobi.phosh.Shell.service.d/50-gnosh.conf</code></td><td>sets <code>GTK_MODULES</code> for Phosh</td></tr>
+<tr><td><code>~/.config/systemd/user/gnosh-update.timer</code></td><td>daily <code>gnosh self-update</code> and <code>gnosh update</code></td></tr>
+<tr><td><code>~/.local/bin/gext</code></td><td>gnome-extensions-cli wrapper (filesystem backend)</td></tr>
+<tr><td><code>~/.config/gnosh/config.json</code></td><td>gnosh settings</td></tr>
+</table>
+
+<h2 id="cli">The gnosh command</h2>
+<table>
+<tr><th>Command</th><th>What it does</th></tr>
+<tr><td><code>gnosh status</code></td><td>whether gnosh runs in Phosh, and extensions with problems</td></tr>
+<tr><td><code>gnosh list [-v] [--enabled] [--json]</code></td><td>installed extensions and their state</td></tr>
+<tr><td><code>gnosh search TERM</code></td><td>search extensions.gnome.org (only extensions with a GNOME 45–51 build)</td></tr>
+<tr><td><code>gnosh install UUID|URL|TERM|FILE.zip</code></td><td>install, compile settings schemas, enable and load into the running Phosh</td></tr>
+<tr><td><code>gnosh enable|disable UUID [--phosh-only]</code></td><td>uses GNOME's setting, or with <code>--phosh-only</code> only gnosh's</td></tr>
+<tr><td><code>gnosh uninstall UUID</code></td><td>remove a user-installed extension</td></tr>
+<tr><td><code>gnosh prefs UUID</code></td><td>open the extension's preferences</td></tr>
+<tr><td><code>gnosh info UUID</code></td><td>details, including whether it is supported in Phosh</td></tr>
+<tr><td><code>gnosh update [--check] [UUID…]</code></td><td>newer versions from extensions.gnome.org (run after the next login)</td></tr>
+<tr><td><code>gnosh self-update [--check]</code></td><td>install the newest gnosh release from GitHub (checksum verified)</td></tr>
+<tr><td><code>gnosh doctor</code></td><td>check the installation and explain what is wrong</td></tr>
+<tr><td><code>gnosh shell status|enable|disable|pause|reset</code></td><td>control whether gnosh loads into Phosh; <code>reset</code> clears the crash guard</td></tr>
+<tr><td><code>gnosh config [KEY [VALUE]]</code></td><td><code>shell-version</code>, <code>allow-unsupported</code>, <code>auto-update</code></td></tr>
+<tr><td><code>gnosh log</code></td><td>gnosh's messages from this boot's Phosh log</td></tr>
+</table>
+<p><code>gnosh</code> refuses to run outside Phosh. Over ssh it works when Phosh runs for your user.</p>
+
+<h2 id="ui">Where extensions show up</h2>
+<ul>
+<li><strong>Top bar:</strong> panel indicators and quick settings indicator icons, in Phosh's status icon area. Tapping one opens the quick settings drawer at its page.</li>
+<li><strong>Quick settings:</strong> one tile per indicator menu and per quick settings item. Tapping a toggle switches it, and the arrow (or tapping a menu-only tile) opens its page. A <em>Settings</em> button at the bottom of the page opens the extension's preferences when its menu has no settings item.</li>
+<li><strong>Dialogs:</strong> extension dialogs appear as Phosh system dialogs.</li>
+<li><strong>Notifications:</strong> they go to Phosh's notification list, with buttons for their actions.</li>
+</ul>
+
+<h2 id="limits">Limitations</h2>
+<ul>
+<li>Extensions that change GNOME Shell itself (dock, overview, panel replacements, window tiling, workspaces, blur and other compositor effects, shell themes) can't work in Phosh. gnosh refuses them with a reason (<code>runtime/data/compat.json</code>).</li>
+<li>No animations: eased properties jump to their final value and completion callbacks still run.</li>
+<li><code>Main.layoutManager.addChrome()</code> overlays (floating widgets on the stage) are kept but not shown.</li>
+<li>Windows: gnosh knows the app id and fullscreen and maximized state of open apps (from Phosh's overview), but not which one is focused, and it can't move or close windows.</li>
+<li>Clipboard monitoring only sees changes while Phosh has keyboard focus, for example while the drawer is open. Setting the clipboard works.</li>
+<li>No XEmbed tray icons (there is no X11 in phoc). StatusNotifier icons through the AppIndicator extension work.</li>
+<li>Extensions can't be updated in a running shell; updates apply after the next login, as in GNOME Shell.</li>
+</ul>
+
+<h2 id="troubleshooting">Troubleshooting</h2>
+<pre><code>gnosh doctor          # step-by-step checks
+gnosh log             # gnosh messages from Phosh's journal
+gnosh list -v         # per-extension errors</code></pre>
+<ul>
+<li><strong>Phosh fails to start or loops:</strong> gnosh stays out after two unstable starts. Run <code>gnosh shell reset</code> once you have fixed the cause, or <code>gnosh shell disable</code> to stop loading it.</li>
+<li><strong>"settings schema could not be found":</strong> install <code>glib-compile-schemas</code> (Alpine/pmOS <code>glib</code>, Debian <code>libglib2.0-bin</code>, Fedora <code>glib2</code>).</li>
+<li><strong>Extension Manager says GNOME Shell is not running:</strong> gnosh isn't running in Phosh. Check <code>gnosh doctor</code>.</li>
+</ul>
+
+<h2 id="dev">Development</h2>
+<pre><code>make test                         # lint + unit tests
+make module                       # build the module for this machine
+podman build -t gnosh-test-pmos -f tests/container/Containerfile.pmos tests/container
+tests/integration/run-nested.sh /tmp/out tests/integration/steps/official.sh
+tests/integration/container-run.sh tests/integration/test-setup.sh /tmp/out
+tests/integration/matrix.sh tests/cache/ext /tmp/matrix && tools/matrix-summary.py /tmp/matrix tests/cache/ext</code></pre>
+<p>While Phosh runs with <code>GNOSH_UNSAFE=1</code>, the D-Bus method <code>io.github.dixonsolutions.Gnosh.Eval</code> evaluates JavaScript in the shell (tests only; it is off by default).</p>

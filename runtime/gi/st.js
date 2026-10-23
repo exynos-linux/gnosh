@@ -70,7 +70,7 @@ export class ThemeNode {
     }
 
     get _ctx() {
-        return this._widget._inner?.get_style_context() ?? null;
+        return this._widget._gnoshInner?.get_style_context() ?? null;
     }
 
     get _state() {
@@ -331,7 +331,7 @@ export const Widget = GObject.registerClass({
 }, class Widget extends Actor {
     _propChanged(key, value) {
         super._propChanged(key, value);
-        if (!this._inner)
+        if (!this._gnoshInner)
             return;
         switch (key) {
         case 'style_class':
@@ -344,7 +344,7 @@ export const Widget = GObject.registerClass({
             this._gnoshApplyCss();
             break;
         case 'can_focus':
-            (this._gnoshFocusWidget ?? this._outer).can_focus = value;
+            (this._gnoshFocusWidget ?? this._gnoshOuter).can_focus = value;
             break;
         case 'hover':
             this._gnoshSetPseudo('hover', value);
@@ -353,8 +353,8 @@ export const Widget = GObject.registerClass({
     }
 
     _gnoshSyncClasses() {
-        const ctx = this._inner.get_style_context();
-        const wanted = new Set((this._p.style_class ?? '').split(/\s+/).filter(Boolean));
+        const ctx = this._gnoshInner.get_style_context();
+        const wanted = new Set((this._gnoshP.style_class ?? '').split(/\s+/).filter(Boolean));
         for (const cls of this._gnoshAppliedClasses ?? []) {
             if (!wanted.has(cls))
                 ctx.remove_class(cls);
@@ -366,33 +366,33 @@ export const Widget = GObject.registerClass({
     }
 
     _gnoshSyncPseudo() {
-        const wanted = new Set((this._p.pseudo_class ?? '').split(/\s+/).filter(Boolean));
+        const wanted = new Set((this._gnoshP.pseudo_class ?? '').split(/\s+/).filter(Boolean));
         let flags = 0;
         for (const p of wanted)
             flags |= PSEUDO_STATE[p] ?? 0;
         const mask = Object.values(PSEUDO_STATE).reduce((a, b) => a | b, 0);
-        this._inner.unset_state_flags(mask & ~flags & ~Gtk.StateFlags.INSENSITIVE);
+        this._gnoshInner.unset_state_flags(mask & ~flags & ~Gtk.StateFlags.INSENSITIVE);
         if (flags)
-            this._inner.set_state_flags(flags & ~Gtk.StateFlags.INSENSITIVE, false);
+            this._gnoshInner.set_state_flags(flags & ~Gtk.StateFlags.INSENSITIVE, false);
         this.emit('style-changed');
     }
 
     /** St-only properties from the inline style and loaded stylesheets. */
     _gnoshStProps() {
-        const classes = (this._p.style_class ?? '').split(/\s+/).filter(Boolean);
+        const classes = (this._gnoshP.style_class ?? '').split(/\s+/).filter(Boolean);
         const out = Style.lookupStProperties(classes);
-        const {st} = Style.splitDeclarations(Style.parseDeclarations(this._p.style));
+        const {st} = Style.splitDeclarations(Style.parseDeclarations(this._gnoshP.style));
         return Object.assign(out, st);
     }
 
     _gnoshApplyCss() {
-        if (!this._inner)
+        if (!this._gnoshInner)
             return;
-        const decls = Style.parseDeclarations(this._p.style);
+        const decls = Style.parseDeclarations(this._gnoshP.style);
         const {css} = Style.splitDeclarations(decls);
-        const extra = Object.values(this._extraCss ?? {}).join(' ');
-        this._cssState ??= {};
-        Style.setWidgetCss(this._inner, `${css} ${extra}`.trim(), this._cssState);
+        const extra = Object.values(this._gnoshExtraCssSlots ?? {}).join(' ');
+        this._gnoshCssState ??= {};
+        Style.setWidgetCss(this._gnoshInner, `${css} ${extra}`.trim(), this._gnoshCssState);
         this._gnoshApplyStProps(this._gnoshStProps());
         this.emit('style-changed');
         this.vfunc_style_changed();
@@ -400,25 +400,25 @@ export const Widget = GObject.registerClass({
 
     /** Apply St-only properties (spacing, icon-size, ...). Subclasses extend. */
     _gnoshApplyStProps(st) {
-        if ('spacing' in st && this._inner instanceof Gtk.Box) {
+        if ('spacing' in st && this._gnoshInner instanceof Gtk.Box) {
             const s = Style.parseLength(st.spacing);
             if (s !== null)
-                this._inner.spacing = s;
+                this._gnoshInner.spacing = s;
         }
-        if (('width' in st || 'height' in st) && (this._p.width ?? -1) < 0 && (this._p.height ?? -1) < 0) {
+        if (('width' in st || 'height' in st) && (this._gnoshP.width ?? -1) < 0 && (this._gnoshP.height ?? -1) < 0) {
             const w = Style.parseLength(st.width) ?? -1;
             const h = Style.parseLength(st.height) ?? -1;
-            this._outer.set_size_request(w, h);
+            this._gnoshOuter.set_size_request(w, h);
         }
     }
 
     _gnoshHoverChanged(inside) {
-        if (this._p.track_hover)
+        if (this._gnoshP.track_hover)
             this.hover = inside;
     }
 
     _gnoshSetPseudo(name, on) {
-        const set = new Set((this._p.pseudo_class ?? '').split(/\s+/).filter(Boolean));
+        const set = new Set((this._gnoshP.pseudo_class ?? '').split(/\s+/).filter(Boolean));
         if (on)
             set.add(name);
         else
@@ -441,7 +441,7 @@ export const Widget = GObject.registerClass({
     // --- St.Widget API ---
 
     get_style_class_name() {
-        return this._p.style_class ?? null;
+        return this._gnoshP.style_class ?? null;
     }
 
     set_style_class_name(name) {
@@ -449,7 +449,7 @@ export const Widget = GObject.registerClass({
     }
 
     add_style_class_name(name) {
-        const set = new Set((this._p.style_class ?? '').split(/\s+/).filter(Boolean));
+        const set = new Set((this._gnoshP.style_class ?? '').split(/\s+/).filter(Boolean));
         for (const n of String(name).split(/\s+/).filter(Boolean))
             set.add(n);
         this.style_class = [...set].join(' ');
@@ -457,16 +457,16 @@ export const Widget = GObject.registerClass({
 
     remove_style_class_name(name) {
         const remove = new Set(String(name).split(/\s+/));
-        const kept = (this._p.style_class ?? '').split(/\s+/).filter(c => c && !remove.has(c));
+        const kept = (this._gnoshP.style_class ?? '').split(/\s+/).filter(c => c && !remove.has(c));
         this.style_class = kept.join(' ') || null;
     }
 
     has_style_class_name(name) {
-        return (this._p.style_class ?? '').split(/\s+/).includes(name);
+        return (this._gnoshP.style_class ?? '').split(/\s+/).includes(name);
     }
 
     get_style_pseudo_class() {
-        return this._p.pseudo_class ?? null;
+        return this._gnoshP.pseudo_class ?? null;
     }
 
     set_style_pseudo_class(p) {
@@ -482,11 +482,11 @@ export const Widget = GObject.registerClass({
     }
 
     has_style_pseudo_class(name) {
-        return (this._p.pseudo_class ?? '').split(/\s+/).includes(name);
+        return (this._gnoshP.pseudo_class ?? '').split(/\s+/).includes(name);
     }
 
     get_style() {
-        return this._p.style ?? null;
+        return this._gnoshP.style ?? null;
     }
 
     set_style(style) {
@@ -494,8 +494,8 @@ export const Widget = GObject.registerClass({
     }
 
     get_theme_node() {
-        this._themeNode ??= new ThemeNode(this);
-        return this._themeNode;
+        this._gnoshThemeNode ??= new ThemeNode(this);
+        return this._gnoshThemeNode;
     }
 
     peek_theme_node() {
@@ -584,7 +584,7 @@ export const Widget = GObject.registerClass({
     }
 
     get_resource_scale() {
-        return this._outer?.get_scale_factor() ?? 1;
+        return this._gnoshOuter?.get_scale_factor() ?? 1;
     }
 
     set_important(v) {
@@ -612,23 +612,23 @@ export const BoxLayout = GObject.registerClass({
     }
 
     _gnoshCreateContainer() {
-        if (this._p.layout_manager && this._p.layout_manager._gnoshKind !== 'box')
+        if (this._gnoshP.layout_manager && this._gnoshP.layout_manager._gnoshKind !== 'box')
             return super._gnoshCreateContainer();
         return new Gtk.Box({orientation: this._gnoshVertical() ? Gtk.Orientation.VERTICAL : Gtk.Orientation.HORIZONTAL});
     }
 
     _gnoshVertical() {
-        return this._p.vertical || this._p.orientation === CE.Orientation.VERTICAL;
+        return this._gnoshP.vertical || this._gnoshP.orientation === CE.Orientation.VERTICAL;
     }
 
     _propChanged(key, value) {
-        if (key === 'vertical' && this._p.orientation !== (value ? 1 : 0))
-            this._p.orientation = value ? CE.Orientation.VERTICAL : CE.Orientation.HORIZONTAL;
+        if (key === 'vertical' && this._gnoshP.orientation !== (value ? 1 : 0))
+            this._gnoshP.orientation = value ? CE.Orientation.VERTICAL : CE.Orientation.HORIZONTAL;
         else if (key === 'orientation')
-            this._p.vertical = value === CE.Orientation.VERTICAL;
+            this._gnoshP.vertical = value === CE.Orientation.VERTICAL;
         super._propChanged(key, value);
-        if ((key === 'vertical' || key === 'orientation') && this._inner instanceof Gtk.Box)
-            this._inner.orientation = this._gnoshVertical() ? Gtk.Orientation.VERTICAL : Gtk.Orientation.HORIZONTAL;
+        if ((key === 'vertical' || key === 'orientation') && this._gnoshInner instanceof Gtk.Box)
+            this._gnoshInner.orientation = this._gnoshVertical() ? Gtk.Orientation.VERTICAL : Gtk.Orientation.HORIZONTAL;
     }
 
     get_vertical() {
@@ -688,17 +688,17 @@ export const Bin = GObject.registerClass({
 
     _propChanged(key, value) {
         super._propChanged(key, value);
-        if (key === 'child' && this._outer)
+        if (key === 'child' && this._gnoshOuter)
             this._gnoshSetChild(value);
     }
 
     _gnoshSyncAll() {
-        const child = this._p.child;
-        delete this._p.child;
+        const child = this._gnoshP.child;
+        delete this._gnoshP.child;
         super._gnoshSyncAll();
         if (child)
             this._gnoshSetChild(child);
-        this._p.child = child ?? null;
+        this._gnoshP.child = child ?? null;
     }
 
     _gnoshSetChild(child) {
@@ -712,16 +712,16 @@ export const Bin = GObject.registerClass({
 
     remove_child(child) {
         super.remove_child(child);
-        if (this._p.child === child) {
-            this._p.child = null;
+        if (this._gnoshP.child === child) {
+            this._gnoshP.child = null;
             this.notify('child');
         }
     }
 
     add_child(child) {
         super.add_child(child);
-        if (this._p.child !== child) {
-            this._p.child = child;
+        if (this._gnoshP.child !== child) {
+            this._gnoshP.child = child;
             this.notify('child');
         }
     }
@@ -731,7 +731,7 @@ export const Bin = GObject.registerClass({
     }
 
     get_child() {
-        return this._p.child ?? null;
+        return this._gnoshP.child ?? null;
     }
 });
 installAccessors(Bin, BIN_PROPERTIES);
@@ -744,8 +744,8 @@ export const Label = GObject.registerClass({
 }, class Label extends Widget {
     _gnoshCreateInner() {
         const label = new Gtk.Label({xalign: 0, yalign: 0.5, ellipsize: Pango.EllipsizeMode.END, single_line_mode: false});
-        this._clutterText = new Text({_gnoshWidget: label});
-        this._clutterText._gnoshOwner = this;
+        this._gnoshClutterText = new Text({_gnoshWidget: label});
+        this._gnoshClutterText._gnoshOwner = this;
         return label;
     }
 
@@ -755,28 +755,28 @@ export const Label = GObject.registerClass({
 
     _propChanged(key, value) {
         super._propChanged(key, value);
-        if (key === 'text' && this._inner) {
-            this._clutterText.set_text(value ?? '');
+        if (key === 'text' && this._gnoshInner) {
+            this._gnoshClutterText.set_text(value ?? '');
         }
     }
 
     get text() {
-        return this._inner ? this._inner.get_text() : this._p.text ?? '';
+        return this._gnoshInner ? this._gnoshInner.get_text() : this._gnoshP.text ?? '';
     }
 
     set text(value) {
-        this._p.text = value;
+        this._gnoshP.text = value;
         this._propChanged('text', value);
         if (this._gnoshConstructed)
             this.notify('text');
     }
 
     get clutter_text() {
-        return this._clutterText;
+        return this._gnoshClutterText;
     }
 
     get clutterText() {
-        return this._clutterText;
+        return this._gnoshClutterText;
     }
 
     get_text() {
@@ -788,7 +788,7 @@ export const Label = GObject.registerClass({
     }
 
     get_clutter_text() {
-        return this._clutterText;
+        return this._gnoshClutterText;
     }
 
     _gnoshApplyStProps(st) {
@@ -796,7 +796,7 @@ export const Label = GObject.registerClass({
         if (st['text-align']) {
             const map = {left: 0, center: 0.5, right: 1};
             if (st['text-align'] in map)
-                this._inner.xalign = map[st['text-align']];
+                this._gnoshInner.xalign = map[st['text-align']];
         }
     }
 });
@@ -826,7 +826,7 @@ export const Icon = GObject.registerClass({
 
     _propChanged(key, value) {
         super._propChanged(key, value);
-        if (this._inner && ['icon_name', 'gicon', 'fallback_icon_name', 'fallback_gicon', 'icon_size', 'content'].includes(key))
+        if (this._gnoshInner && ['icon_name', 'gicon', 'fallback_icon_name', 'fallback_gicon', 'icon_size', 'content'].includes(key))
             this._gnoshUpdateIcon();
     }
 
@@ -836,13 +836,13 @@ export const Icon = GObject.registerClass({
     }
 
     _gnoshPixelSize() {
-        if ((this._p.icon_size ?? -1) > 0)
-            return this._p.icon_size;
+        if ((this._gnoshP.icon_size ?? -1) > 0)
+            return this._gnoshP.icon_size;
         const st = this._gnoshStProps();
         const fromCss = Style.parseLength(st['icon-size']);
         if (fromCss)
             return fromCss;
-        for (const cls of (this._p.style_class ?? '').split(/\s+/)) {
+        for (const cls of (this._gnoshP.style_class ?? '').split(/\s+/)) {
             if (CLASS_ICON_SIZES[cls])
                 return CLASS_ICON_SIZES[cls];
         }
@@ -852,14 +852,14 @@ export const Icon = GObject.registerClass({
     _gnoshResolveGIcon() {
         const theme = Gtk.IconTheme.get_default();
         const candidates = [];
-        if (this._p.gicon)
-            candidates.push(this._p.gicon);
-        if (this._p.icon_name && aliasIcon(this._p.icon_name))
-            candidates.push(Gio.ThemedIcon.new_with_default_fallbacks(aliasIcon(this._p.icon_name)));
-        if (this._p.fallback_gicon)
-            candidates.push(this._p.fallback_gicon);
-        if (this._p.fallback_icon_name)
-            candidates.push(Gio.ThemedIcon.new(this._p.fallback_icon_name));
+        if (this._gnoshP.gicon)
+            candidates.push(this._gnoshP.gicon);
+        if (this._gnoshP.icon_name && aliasIcon(this._gnoshP.icon_name))
+            candidates.push(Gio.ThemedIcon.new_with_default_fallbacks(aliasIcon(this._gnoshP.icon_name)));
+        if (this._gnoshP.fallback_gicon)
+            candidates.push(this._gnoshP.fallback_gicon);
+        if (this._gnoshP.fallback_icon_name)
+            candidates.push(Gio.ThemedIcon.new(this._gnoshP.fallback_icon_name));
         for (const icon of candidates) {
             if (icon instanceof ImageContent)
                 return icon;
@@ -872,7 +872,7 @@ export const Icon = GObject.registerClass({
     }
 
     _gnoshUpdateIcon() {
-        const image = this._inner;
+        const image = this._gnoshInner;
         const size = this._gnoshPixelSize();
         const icon = this._gnoshResolveGIcon();
         image.pixel_size = size;
@@ -891,15 +891,15 @@ export const Icon = GObject.registerClass({
         image.set_from_gicon(icon, Gtk.IconSize.BUTTON);
         image.pixel_size = size;
         const names = icon instanceof Gio.ThemedIcon ? icon.get_names() : [];
-        this._p.is_symbolic = names.some(n => n.endsWith('-symbolic'));
+        this._gnoshP.is_symbolic = names.some(n => n.endsWith('-symbolic'));
     }
 
     get gicon() {
-        return this._p.gicon ?? null;
+        return this._gnoshP.gicon ?? null;
     }
 
     set gicon(value) {
-        this._p.gicon = value;
+        this._gnoshP.gicon = value;
         this._propChanged('gicon', value);
         if (this._gnoshConstructed)
             this.notify('gicon');
@@ -989,20 +989,20 @@ export const Button = GObject.registerClass({
     }
 
     get _gnoshChildContainer() {
-        return this._inner;
+        return this._gnoshInner;
     }
 
     _gnoshClicked(button) {
-        if (this._destroyed || !this._p.reactive)
+        if (this._gnoshDestroyed || !this._gnoshP.reactive)
             return;
-        if (this._p.toggle_mode)
-            this.checked = !this._p.checked;
+        if (this._gnoshP.toggle_mode)
+            this.checked = !this._gnoshP.checked;
         this.emit('clicked', button);
     }
 
     _propChanged(key, value) {
         super._propChanged(key, value);
-        if (!this._inner)
+        if (!this._gnoshInner)
             return;
         switch (key) {
         case 'label':
@@ -1017,7 +1017,7 @@ export const Button = GObject.registerClass({
             this._gnoshSetPseudo('checked', value);
             break;
         case 'reactive':
-            this._inner.sensitive = true;
+            this._gnoshInner.sensitive = true;
             break;
         }
     }
@@ -1089,8 +1089,8 @@ export const Entry = GObject.registerClass({
 
     _gnoshCreateInner() {
         const entry = new Gtk.Entry({hexpand: true});
-        this._clutterText = new Text({_gnoshWidget: entry, editable: true, reactive: true});
-        this._clutterText._gnoshOwner = this;
+        this._gnoshClutterText = new Text({_gnoshWidget: entry, editable: true, reactive: true});
+        this._gnoshClutterText._gnoshOwner = this;
         entry.connect('icon-press', (w, pos) => this.emit(pos === Gtk.EntryIconPosition.PRIMARY
             ? 'primary-icon-clicked' : 'secondary-icon-clicked'));
         this._gnoshFocusWidget = entry;
@@ -1103,49 +1103,49 @@ export const Entry = GObject.registerClass({
 
     _propChanged(key, value) {
         super._propChanged(key, value);
-        if (!this._inner)
+        if (!this._gnoshInner)
             return;
         switch (key) {
         case 'text':
-            this._inner.set_text(value ?? '');
+            this._gnoshInner.set_text(value ?? '');
             break;
         case 'hint_text':
-            this._inner.placeholder_text = value ?? '';
+            this._gnoshInner.placeholder_text = value ?? '';
             break;
         case 'hint_actor':
             if (value?.text)
-                this._inner.placeholder_text = value.text;
+                this._gnoshInner.placeholder_text = value.text;
             break;
         case 'primary_icon':
         case 'secondary_icon': {
             const pos = key === 'primary_icon' ? Gtk.EntryIconPosition.PRIMARY : Gtk.EntryIconPosition.SECONDARY;
             const gicon = value?.gicon ?? (value?.icon_name ? Gio.ThemedIcon.new(value.icon_name) : null);
-            this._inner.set_icon_from_gicon(pos, gicon);
+            this._gnoshInner.set_icon_from_gicon(pos, gicon);
             break;
         }
         case 'input_purpose':
-            this._inner.input_purpose = Math.min(value, 9);
+            this._gnoshInner.input_purpose = Math.min(value, 9);
             break;
         }
     }
 
     get text() {
-        return this._inner ? this._inner.get_text() : this._p.text ?? '';
+        return this._gnoshInner ? this._gnoshInner.get_text() : this._gnoshP.text ?? '';
     }
 
     set text(v) {
-        this._p.text = v;
+        this._gnoshP.text = v;
         this._propChanged('text', v);
         if (this._gnoshConstructed)
             this.notify('text');
     }
 
     get clutter_text() {
-        return this._clutterText;
+        return this._gnoshClutterText;
     }
 
     get clutterText() {
-        return this._clutterText;
+        return this._gnoshClutterText;
     }
 
     get_text() {
@@ -1157,7 +1157,7 @@ export const Entry = GObject.registerClass({
     }
 
     get_clutter_text() {
-        return this._clutterText;
+        return this._gnoshClutterText;
     }
 
     get_hint_text() {
@@ -1201,7 +1201,7 @@ export const Entry = GObject.registerClass({
     }
 
     grab_key_focus() {
-        this._inner?.grab_focus();
+        this._gnoshInner?.grab_focus();
     }
 });
 installAccessors(Entry, ENTRY_PROPERTIES);
@@ -1219,8 +1219,8 @@ export const PasswordEntry = GObject.registerClass({
 
     _propChanged(key, value) {
         super._propChanged(key, value);
-        if (key === 'password_visible' && this._inner)
-            this._inner.visibility = value;
+        if (key === 'password_visible' && this._gnoshInner)
+            this._gnoshInner.visibility = value;
     }
 });
 
@@ -1242,7 +1242,7 @@ export const Adjustment = GObject.registerClass({
     Signals: {'changed': {}},
 }, class Adjustment extends GObject.Object {
     _init(params = {}) {
-        this._p = {};
+        this._gnoshP = {};
         const gtkAdj = params._gnoshGtk;
         delete params._gnoshGtk;
         super._init(params);
@@ -1252,19 +1252,19 @@ export const Adjustment = GObject.registerClass({
     }
 
     _gnoshBind(adj) {
-        this._gtk = adj;
+        this._gnoshGtk = adj;
         const names = ['value', 'lower', 'upper', 'step_increment', 'page_increment', 'page_size'];
         adj.connect('value-changed', () => this.notify('value'));
         adj.connect('changed', () => this.emit('changed'));
         for (const n of names) {
-            if (this._p[n] !== undefined)
-                adj[n] = this._p[n];
+            if (this._gnoshP[n] !== undefined)
+                adj[n] = this._gnoshP[n];
         }
     }
 
     _propChanged(key, value) {
-        if (this._gtk && key !== 'actor' && this._gtk[key] !== value)
-            this._gtk[key] = value;
+        if (this._gnoshGtk && key !== 'actor' && this._gnoshGtk[key] !== value)
+            this._gnoshGtk[key] = value;
     }
 
     get_value() {
@@ -1315,17 +1315,17 @@ for (const [name, def] of Object.entries(ADJ_PROPERTIES)) {
     Object.defineProperty(Adjustment.prototype, key, {
         configurable: true,
         get() {
-            if (this._gtk && key !== 'actor')
-                return this._gtk[key];
-            return this._p?.[key] ?? def.def;
+            if (this._gnoshGtk && key !== 'actor')
+                return this._gnoshGtk[key];
+            return this._gnoshP?.[key] ?? def.def;
         },
         set(v) {
-            this._p ??= {};
+            this._gnoshP ??= {};
             if (this[key] === v)
                 return;
-            this._p[key] = v;
+            this._gnoshP[key] = v;
             this._propChanged?.(key, v);
-            if (this._gnoshConstructed && !(this._gtk && key === 'value'))
+            if (this._gnoshConstructed && !(this._gnoshGtk && key === 'value'))
                 this.notify(name);
         },
     });
@@ -1359,13 +1359,13 @@ export const ScrollView = GObject.registerClass({
             propagate_natural_height: true,
             propagate_natural_width: true,
         });
-        this._viewport = new Gtk.Viewport({shadow_type: Gtk.ShadowType.NONE});
-        this._viewport.show();
-        sw.add(this._viewport);
-        this._hadjustment = new Adjustment({_gnoshGtk: sw.get_hadjustment()});
-        this._vadjustment = new Adjustment({_gnoshGtk: sw.get_vadjustment()});
-        this._hscroll = new ScrollBar({adjustment: this._hadjustment, vertical: false});
-        this._vscroll = new ScrollBar({adjustment: this._vadjustment, vertical: true});
+        this._gnoshViewport = new Gtk.Viewport({shadow_type: Gtk.ShadowType.NONE});
+        this._gnoshViewport.show();
+        sw.add(this._gnoshViewport);
+        this._gnoshHadjustment = new Adjustment({_gnoshGtk: sw.get_hadjustment()});
+        this._gnoshVadjustment = new Adjustment({_gnoshGtk: sw.get_vadjustment()});
+        this._gnoshHscroll = new ScrollBar({adjustment: this._gnoshHadjustment, vertical: false});
+        this._gnoshVscroll = new ScrollBar({adjustment: this._gnoshVadjustment, vertical: true});
         return sw;
     }
 
@@ -1374,12 +1374,12 @@ export const ScrollView = GObject.registerClass({
     }
 
     get _gnoshChildContainer() {
-        return this._viewport;
+        return this._gnoshViewport;
     }
 
     _propChanged(key, value) {
         super._propChanged(key, value);
-        if (!this._inner)
+        if (!this._gnoshInner)
             return;
         switch (key) {
         case 'child':
@@ -1391,47 +1391,47 @@ export const ScrollView = GObject.registerClass({
                 this.add_child(value);
             break;
         case 'hscrollbar_policy':
-            this._inner.hscrollbar_policy = value;
+            this._gnoshInner.hscrollbar_policy = value;
             break;
         case 'vscrollbar_policy':
-            this._inner.vscrollbar_policy = value;
+            this._gnoshInner.vscrollbar_policy = value;
             break;
         case 'overlay_scrollbars':
-            this._inner.overlay_scrolling = value;
+            this._gnoshInner.overlay_scrolling = value;
             break;
         }
     }
 
     _gnoshSyncAll() {
-        const child = this._p.child;
-        delete this._p.child;
+        const child = this._gnoshP.child;
+        delete this._gnoshP.child;
         super._gnoshSyncAll();
         if (child)
             this.child = child;
     }
 
     get hadjustment() {
-        return this._hadjustment;
+        return this._gnoshHadjustment;
     }
 
     get vadjustment() {
-        return this._vadjustment;
+        return this._gnoshVadjustment;
     }
 
     get hscroll() {
-        return this._hscroll;
+        return this._gnoshHscroll;
     }
 
     get vscroll() {
-        return this._vscroll;
+        return this._gnoshVscroll;
     }
 
     get_hscroll_bar() {
-        return this._hscroll;
+        return this._gnoshHscroll;
     }
 
     get_vscroll_bar() {
-        return this._vscroll;
+        return this._gnoshVscroll;
     }
 
     set_policy(h, v) {
@@ -1444,18 +1444,18 @@ export const ScrollView = GObject.registerClass({
     }
 
     get_child() {
-        return this._p.child ?? this.get_first_child();
+        return this._gnoshP.child ?? this.get_first_child();
     }
 
     add_child(child) {
         super.add_child(child);
-        this._p.child = child;
+        this._gnoshP.child = child;
     }
 
     remove_child(child) {
         super.remove_child(child);
-        if (this._p.child === child)
-            this._p.child = null;
+        if (this._gnoshP.child === child)
+            this._gnoshP.child = null;
     }
 
     update_fade_effect() {}
@@ -1483,14 +1483,14 @@ export const DrawingArea = GObject.registerClass({
     _gnoshCreateInner() {
         const area = new Gtk.DrawingArea();
         area.connect('draw', (w, cr) => {
-            this._cr = cr;
+            this._gnoshCr = cr;
             try {
                 this.vfunc_repaint();
                 this.emit('repaint');
             } catch (e) {
                 logError(e, 'gnosh: St.DrawingArea repaint');
             } finally {
-                this._cr = null;
+                this._gnoshCr = null;
             }
             return false;
         });
@@ -1504,15 +1504,15 @@ export const DrawingArea = GObject.registerClass({
     vfunc_repaint() {}
 
     get_context() {
-        return this._cr;
+        return this._gnoshCr;
     }
 
     get_surface_size() {
-        return [this._inner.get_allocated_width(), this._inner.get_allocated_height()];
+        return [this._gnoshInner.get_allocated_width(), this._gnoshInner.get_allocated_height()];
     }
 
     queue_repaint() {
-        this._inner?.queue_draw();
+        this._gnoshInner?.queue_draw();
     }
 });
 
@@ -1523,7 +1523,7 @@ export const ImageContent = GObject.registerClass({
     Properties: makeProperties({'preferred-width': P.int(-1), 'preferred-height': P.int(-1)}),
 }, class ImageContent extends GObject.Object {
     _init(params = {}) {
-        this._p = {};
+        this._gnoshP = {};
         super._init(params);
     }
 
@@ -1577,7 +1577,7 @@ export const Clipboard = GObject.registerClass({
     }
 
     get_text(type, callback) {
-        this._gtk(type).request_text((cb, text) => {
+        this._gnoshGtk(type).request_text((cb, text) => {
             try {
                 callback(this, text ?? null);
             } catch (e) {
@@ -1587,17 +1587,17 @@ export const Clipboard = GObject.registerClass({
     }
 
     set_text(type, text) {
-        this._gtk(type).set_text(text ?? '', -1);
+        this._gnoshGtk(type).set_text(text ?? '', -1);
         globalThis.global?.display?.get_selection?.()._gnoshOwnerChanged?.(type);
     }
 
     get_mimetypes(type) {
-        const [ok, atoms] = this._gtk(type).wait_for_targets();
+        const [ok, atoms] = this._gnoshGtk(type).wait_for_targets();
         return ok ? atoms.map(a => a.name()) : [];
     }
 
     get_content(type, mimetype, callback) {
-        this._gtk(type).request_contents(Gdk.Atom.intern(mimetype, false), (cb, data) => {
+        this._gnoshGtk(type).request_contents(Gdk.Atom.intern(mimetype, false), (cb, data) => {
             callback(this, data ? new GLib.Bytes(data.get_data() ?? []) : null);
         });
     }
@@ -1637,7 +1637,7 @@ export const Settings = GObject.registerClass({
     }
 
     _init() {
-        this._p = {};
+        this._gnoshP = {};
         super._init();
         this._gnoshConstructed = true;
         try {
@@ -1645,7 +1645,7 @@ export const Settings = GObject.registerClass({
             for (const [prop, key] of Object.entries(IFACE_KEYS)) {
                 const read = () => {
                     const v = this._iface.get_value(key).deepUnpack();
-                    this._p[prop.replace(/-/g, '_')] = key === 'color-scheme' ? this._iface.get_enum(key) : v;
+                    this._gnoshP[prop.replace(/-/g, '_')] = key === 'color-scheme' ? this._iface.get_enum(key) : v;
                     this.notify(prop);
                 };
                 if (this._iface.settings_schema.has_key(key)) {
@@ -1908,7 +1908,13 @@ export const FocusManager = GObject.registerClass({
 
 export const GenericAccessible = GObject.registerClass({
     GTypeName: 'GnoshStGenericAccessible',
-    Signals: {'get-current-value': {return_type: GObject.TYPE_DOUBLE}},
+    Signals: {
+        'get-current-value': {return_type: GObject.TYPE_DOUBLE},
+        'get-maximum-value': {return_type: GObject.TYPE_DOUBLE},
+        'get-minimum-value': {return_type: GObject.TYPE_DOUBLE},
+        'get-minimum-increment': {return_type: GObject.TYPE_DOUBLE},
+        'set-current-value': {param_types: [GObject.TYPE_DOUBLE]},
+    },
 }, class GenericAccessible extends GObject.Object {
     static new_for_actor() {
         return new GenericAccessible();

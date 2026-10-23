@@ -1,0 +1,27 @@
+<!-- title: Compatibility · gnosh -->
+<h1>Compatibility</h1>
+<p class="lead">Every extension below was installed from extensions.gnome.org and loaded on its own in a fresh Phosh session
+  by <code>tests/integration/matrix.sh</code>. The table is generated from
+  <a href="https://github.com/dixonSolutions/gnosh/blob/main/tests/results/extensions.json"><code>tests/results/extensions.json</code></a>.</p>
+<div class="note">
+  <strong>Statuses.</strong>
+  <span class="badge works">works</span> loads and its UI shows up in Phosh (top bar, tile, page) without errors.
+  <span class="badge partial">partial</span> loads, but logs errors or misses some UI.
+  <span class="badge environment">environment</span> needs something the test container lacks (usually the system D-Bus: UPower, BlueZ, NetworkManager), so it still has to be checked on a device.
+  <span class="badge fails">fails</span> does not load.
+  <span class="badge unsupported">unsupported</span> changes GNOME Shell internals that Phosh doesn't have; gnosh refuses to load it and says why.
+  "Works" means the extension loads and its interface appears. Individual features are listed in the notes where they were checked by hand.
+</div>
+<p class="counts">{{summary}}</p>
+<p class="small">Environment: {{environment}} · last run {{generated}}</p>
+<div class="table-wrap">{{extension_table}}</div>
+
+<h2>Distributions</h2>
+<p>gnosh needs a GTK 3 Phosh, gjs ≥ 1.74, python3 and glib-compile-schemas. It doesn't use libphosh.
+  The Phosh module is prebuilt for x86_64, aarch64, armv7l and riscv64 (glibc and musl).</p>
+<div class="table-wrap">{{distro_table}}</div>
+
+<h2>GNOME Shell versions</h2>
+<p>gnosh implements the extension API of <strong>GNOME Shell 50</strong> and loads extensions made for <strong>GNOME Shell 45–51</strong>
+  (ES modules). When it installs from extensions.gnome.org it picks the GNOME 50 build, or the newest older one.
+  GNOME ≤ 44 extensions (the old <code>imports.*</code> module system) are not supported.</p>

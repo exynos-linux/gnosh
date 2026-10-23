@@ -286,7 +286,10 @@ export function start(bridge) {
     notificationDaemon = new NotificationDaemon.NotificationDaemon();
     ctrlAltTabManager = {addGroup() {}, removeGroup() {}, focusGroup() {}};
     componentManager = {_allComponents: {}, _enabledComponents: []};
-    keyboard = Object.assign(new Signals.EventEmitter(), {visible: false, open() {}, close() {}, _keyboard: null});
+    keyboard = Object.assign(new Signals.EventEmitter(), {
+        visible: false, open() {}, close() {}, _keyboard: null, maybeHandleEvent: () => false,
+        resetSuggestions() {}, setSuggestionsVisible() {},
+    });
     magnifier = {setActive() {}, isActive: () => false};
     xdndHandler = new Signals.EventEmitter();
     screenshotUI = {open() {}, close() {}};

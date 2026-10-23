@@ -5,3 +5,4 @@ __pycache__/
 *.pyc
 /tests/out/
 /node_modules/
+/tests/cache/

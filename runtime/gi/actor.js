@@ -65,7 +65,7 @@ export function warnOnce(key, msg) {
 }
 
 /**
- * Declare GObject properties backed by `this._p` with change hooks.
+ * Declare GObject properties backed by `this._gnoshP` with change hooks.
  *
  * spec: {name: [ParamSpec factory args...], ...} handled by makeSpec.
  */
@@ -102,14 +102,14 @@ export function installAccessors(klass, defs) {
         const descr = {
             configurable: true,
             get() {
-                const v = this._p?.[key];
+                const v = this._gnoshP?.[key];
                 return v === undefined ? def.def : v;
             },
             set(value) {
-                this._p ??= {};
-                if (this._p[key] === value)
+                this._gnoshP ??= {};
+                if (this._gnoshP[key] === value)
                     return;
-                this._p[key] = value;
+                this._gnoshP[key] = value;
                 this._propChanged?.(key, value);
                 if (this._gnoshConstructed)
                     this.notify(name);
@@ -433,7 +433,7 @@ export const LayoutManager = GObject.registerClass({
     }
 
     set_container(container) {
-        this._container = container;
+        this._gnoshContainer = container;
     }
 
     get_child_meta() {
@@ -514,8 +514,8 @@ export const GridLayout = defineLayout('GnoshClutterGridLayout', 'grid', {
 }, {
     attach(child, left, top, width = 1, height = 1) {
         // Like Clutter, attaching also adds the child to the container.
-        child._gridPos = {left, top, width, height};
-        const container = this._container;
+        child._gnoshGridPos = {left, top, width, height};
+        const container = this._gnoshContainer;
         if (!container)
             return;
         if (child.get_parent() === container)
@@ -524,7 +524,7 @@ export const GridLayout = defineLayout('GnoshClutterGridLayout', 'grid', {
             container.add_child(child);
     },
     attach_next_to(child, sibling, side, width = 1, height = 1) {
-        const s = sibling?._gridPos ?? {left: 0, top: 0, width: 1, height: 1};
+        const s = sibling?._gnoshGridPos ?? {left: 0, top: 0, width: 1, height: 1};
         const pos = {left: s.left, top: s.top};
         if (side === E.GridPosition.RIGHT)
             pos.left = s.left + s.width;
@@ -537,8 +537,8 @@ export const GridLayout = defineLayout('GnoshClutterGridLayout', 'grid', {
         this.attach(child, pos.left, pos.top, width, height);
     },
     get_child_at(left, top) {
-        const kids = this._container?.get_children() ?? [];
-        return kids.find(c => c._gridPos?.left === left && c._gridPos?.top === top) ?? null;
+        const kids = this._gnoshContainer?.get_children() ?? [];
+        return kids.find(c => c._gnoshGridPos?.left === left && c._gnoshGridPos?.top === top) ?? null;
     },
     set_row_spacing(s) {
         this.row_spacing = s;
@@ -664,15 +664,15 @@ export const Actor = GObject.registerClass({
     }
 
     _init(params = {}) {
-        this._p = {};
-        this._children = [];
-        this._parent = null;
-        this._destroyed = false;
+        this._gnoshP = {};
+        this._gnoshChildren = [];
+        this._gnoshParent = null;
+        this._gnoshDestroyed = false;
         this._gnoshSerial = ++_actorSerial;
-        this._effects = new Map();
-        this._actions = [];
-        this._constraints = [];
-        this._transitions = new Map();
+        this._gnoshEffects = new Map();
+        this._gnoshActions = [];
+        this._gnoshConstraints = [];
+        this._gnoshTransitions = new Map();
 
         const known = {};
         const later = [];
@@ -716,11 +716,11 @@ export const Actor = GObject.registerClass({
     }
 
     get _gnoshKind() {
-        return this._p.layout_manager?._gnoshKind ?? this._gnoshDefaultKind;
+        return this._gnoshP.layout_manager?._gnoshKind ?? this._gnoshDefaultKind;
     }
 
     _gnoshCreateContainer() {
-        const lm = this._p.layout_manager;
+        const lm = this._gnoshP.layout_manager;
         switch (this._gnoshKind) {
         case 'box': {
             const vertical = lm?.get_orientation?.() === E.Orientation.VERTICAL;
@@ -752,42 +752,42 @@ export const Actor = GObject.registerClass({
 
     /** The GTK container children are packed into. */
     get _gnoshChildContainer() {
-        return this._inner;
+        return this._gnoshInner;
     }
 
     _gnoshEnsureWidget() {
-        if (this._outer)
+        if (this._gnoshOuter)
             return;
-        this._outer = new Gtk.EventBox({visible_window: false, above_child: false, no_show_all: true});
-        this._outer._gnoshActor = this;
-        this._outer.get_style_context().add_class('gnosh-actor');
-        this._outer.add_events(Gdk.EventMask.BUTTON_PRESS_MASK | Gdk.EventMask.BUTTON_RELEASE_MASK |
+        this._gnoshOuter = new Gtk.EventBox({visible_window: false, above_child: false, no_show_all: true});
+        this._gnoshOuter._gnoshActor = this;
+        this._gnoshOuter.get_style_context().add_class('gnosh-actor');
+        this._gnoshOuter.add_events(Gdk.EventMask.BUTTON_PRESS_MASK | Gdk.EventMask.BUTTON_RELEASE_MASK |
             Gdk.EventMask.ENTER_NOTIFY_MASK | Gdk.EventMask.LEAVE_NOTIFY_MASK |
             Gdk.EventMask.SCROLL_MASK | Gdk.EventMask.SMOOTH_SCROLL_MASK |
             Gdk.EventMask.KEY_PRESS_MASK | Gdk.EventMask.KEY_RELEASE_MASK |
             Gdk.EventMask.BUTTON_MOTION_MASK);
         // No TOUCH_MASK: touches then arrive as emulated pointer events,
         // which is what the gesture emulation listens to.
-        this._inner = this._gnoshCreateInner();
-        this._inner._gnoshActor = this;
-        this._inner.get_style_context().add_class('gnosh');
-        this._inner.show();
-        this._outer.add(this._inner);
+        this._gnoshInner = this._gnoshCreateInner();
+        this._gnoshInner._gnoshActor = this;
+        this._gnoshInner.get_style_context().add_class('gnosh');
+        this._gnoshInner.show();
+        this._gnoshOuter.add(this._gnoshInner);
 
-        this._outer.connect('button-press-event', (w, ev) => this._gnoshGtkEvent('button-press-event', ev));
-        this._outer.connect('button-release-event', (w, ev) => this._gnoshGtkEvent('button-release-event', ev));
-        this._outer.connect('scroll-event', (w, ev) => this._gnoshGtkEvent('scroll-event', ev));
-        this._outer.connect('key-press-event', (w, ev) => this._gnoshGtkEvent('key-press-event', ev));
-        this._outer.connect('key-release-event', (w, ev) => this._gnoshGtkEvent('key-release-event', ev));
-        this._outer.connect('motion-notify-event', (w, ev) => this._gnoshGtkEvent('motion-event', ev));
-        this._outer.connect('enter-notify-event', (w, ev) => this._gnoshCrossing(true, ev));
-        this._outer.connect('leave-notify-event', (w, ev) => this._gnoshCrossing(false, ev));
-        this._outer.connect('map', () => this._gnoshSetMapped(true));
-        this._outer.connect('unmap', () => this._gnoshSetMapped(false));
-        this._outer.connect('realize', () => this.emit('realize'));
-        this._outer.connect('size-allocate', () => this.emit('allocation-changed'));
-        this._outer.connect('destroy', () => {
-            if (!this._destroyed)
+        this._gnoshOuter.connect('button-press-event', (w, ev) => this._gnoshGtkEvent('button-press-event', ev));
+        this._gnoshOuter.connect('button-release-event', (w, ev) => this._gnoshGtkEvent('button-release-event', ev));
+        this._gnoshOuter.connect('scroll-event', (w, ev) => this._gnoshGtkEvent('scroll-event', ev));
+        this._gnoshOuter.connect('key-press-event', (w, ev) => this._gnoshGtkEvent('key-press-event', ev));
+        this._gnoshOuter.connect('key-release-event', (w, ev) => this._gnoshGtkEvent('key-release-event', ev));
+        this._gnoshOuter.connect('motion-notify-event', (w, ev) => this._gnoshGtkEvent('motion-event', ev));
+        this._gnoshOuter.connect('enter-notify-event', (w, ev) => this._gnoshCrossing(true, ev));
+        this._gnoshOuter.connect('leave-notify-event', (w, ev) => this._gnoshCrossing(false, ev));
+        this._gnoshOuter.connect('map', () => this._gnoshSetMapped(true));
+        this._gnoshOuter.connect('unmap', () => this._gnoshSetMapped(false));
+        this._gnoshOuter.connect('realize', () => this.emit('realize'));
+        this._gnoshOuter.connect('size-allocate', () => this.emit('allocation-changed'));
+        this._gnoshOuter.connect('destroy', () => {
+            if (!this._gnoshDestroyed)
                 this._gnoshWidgetDestroyed();
         });
 
@@ -797,31 +797,31 @@ export const Actor = GObject.registerClass({
 
     /** Re-apply every property to the widgets. */
     _gnoshSyncAll() {
-        for (const key of Object.keys(this._p))
-            this._propChanged(key, this._p[key]);
+        for (const key of Object.keys(this._gnoshP))
+            this._propChanged(key, this._gnoshP[key]);
         this._gnoshSyncVisible();
     }
 
     _gnoshSyncVisible() {
-        if (!this._outer)
+        if (!this._gnoshOuter)
             return;
-        const visible = this._p.visible ?? false;
+        const visible = this._gnoshP.visible ?? false;
         if (visible)
-            this._outer.show();
+            this._gnoshOuter.show();
         else
-            this._outer.hide();
+            this._gnoshOuter.hide();
     }
 
     _propChanged(key, value) {
-        if (!this._outer)
+        if (!this._gnoshOuter)
             return;
-        const o = this._outer;
+        const o = this._gnoshOuter;
         switch (key) {
         case 'visible':
             // Hiding an actor that has no parent yet keeps it hidden when
             // it gets one, as in Clutter.
-            if (!value && !this._parent)
-                this._p.show_on_set_parent = false;
+            if (!value && !this._gnoshParent)
+                this._gnoshP.show_on_set_parent = false;
             this._gnoshSyncVisible();
             if (this._gnoshConstructed)
                 this.emit(value ? 'show' : 'hide');
@@ -863,11 +863,11 @@ export const Actor = GObject.registerClass({
             break;
         case 'name':
             if (value)
-                this._inner.set_name(value);
+                this._gnoshInner.set_name(value);
             break;
         case 'x':
         case 'y':
-            this._parent?._gnoshMoveFixedChild?.(this);
+            this._gnoshParent?._gnoshMoveFixedChild?.(this);
             break;
         case 'layout_manager':
             this._gnoshLayoutManagerChanged(value);
@@ -879,46 +879,46 @@ export const Actor = GObject.registerClass({
     }
 
     _gnoshSyncSize() {
-        const w = this._p.width ?? -1;
-        const h = this._p.height ?? -1;
-        const mw = this._p.min_width ?? -1;
-        const mh = this._p.min_height ?? -1;
-        const nw = this._p.natural_width ?? -1;
-        const nh = this._p.natural_height ?? -1;
+        const w = this._gnoshP.width ?? -1;
+        const h = this._gnoshP.height ?? -1;
+        const mw = this._gnoshP.min_width ?? -1;
+        const mh = this._gnoshP.min_height ?? -1;
+        const nw = this._gnoshP.natural_width ?? -1;
+        const nh = this._gnoshP.natural_height ?? -1;
         const rw = w >= 0 ? w : Math.max(mw, nw);
         const rh = h >= 0 ? h : Math.max(mh, nh);
-        this._outer.set_size_request(rw >= 0 ? Math.round(rw) : -1, rh >= 0 ? Math.round(rh) : -1);
+        this._gnoshOuter.set_size_request(rw >= 0 ? Math.round(rw) : -1, rh >= 0 ? Math.round(rh) : -1);
     }
 
     _gnoshLayoutManagerChanged(lm) {
-        this._lmSignal && this._lmOld?.disconnect(this._lmSignal);
-        this._lmOld = lm;
-        this._lmSignal = lm?.connect('layout-changed', () => this._gnoshRebuildContainer());
+        this._gnoshLmSignal && this._gnoshLmOld?.disconnect(this._gnoshLmSignal);
+        this._gnoshLmOld = lm;
+        this._gnoshLmSignal = lm?.connect('layout-changed', () => this._gnoshRebuildContainer());
         lm?.set_container?.(this);
         this._gnoshRebuildContainer();
     }
 
     /** Replace the inner container (layout manager changed). */
     _gnoshRebuildContainer() {
-        if (!this._outer || !this._gnoshIsContainerActor)
+        if (!this._gnoshOuter || !this._gnoshIsContainerActor)
             return;
-        const old = this._inner;
-        const kids = [...this._children];
+        const old = this._gnoshInner;
+        const kids = [...this._gnoshChildren];
         for (const child of kids) {
-            const w = child._outer;
+            const w = child._gnoshOuter;
             if (w.get_parent())
                 w.get_parent().remove(w);
         }
-        this._binMain = null;
-        this._outer.remove(old);
-        this._inner = this._gnoshCreateContainer();
-        this._inner._gnoshActor = this;
+        this._gnoshBinMain = null;
+        this._gnoshOuter.remove(old);
+        this._gnoshInner = this._gnoshCreateContainer();
+        this._gnoshInner._gnoshActor = this;
         const oldCtx = old.get_style_context();
-        const ctx = this._inner.get_style_context();
+        const ctx = this._gnoshInner.get_style_context();
         for (const cls of oldCtx.list_classes())
             ctx.add_class(cls);
-        this._inner.show();
-        this._outer.add(this._inner);
+        this._gnoshInner.show();
+        this._gnoshOuter.add(this._gnoshInner);
         old.destroy();
         kids.forEach((child, i) => this._gnoshPack(child, i));
         this._gnoshInnerReplaced?.(old);
@@ -931,7 +931,7 @@ export const Actor = GObject.registerClass({
 
     _gnoshPack(child, index) {
         const container = this._gnoshChildContainer;
-        const w = child._outer;
+        const w = child._gnoshOuter;
         if (!container || !w)
             return;
         if (w.get_parent())
@@ -940,18 +940,18 @@ export const Actor = GObject.registerClass({
             container.pack_start(w, false, true, 0);
             container.reorder_child(w, index);
         } else if (container instanceof Gtk.Overlay) {
-            if (!this._binMain || this._binMain === child || !this._binMain._outer?.get_parent()) {
-                this._binMain = child;
+            if (!this._gnoshBinMain || this._gnoshBinMain === child || !this._gnoshBinMain._gnoshOuter?.get_parent()) {
+                this._gnoshBinMain = child;
                 container.add(w);
             } else {
                 container.add_overlay(w);
                 container.set_overlay_pass_through(w, false);
             }
         } else if (container instanceof Gtk.Grid) {
-            const pos = child._gridPos ?? this._gnoshNextGridPos(child);
+            const pos = child._gnoshGridPos ?? this._gnoshNextGridPos(child);
             container.attach(w, pos.left, pos.top, pos.width ?? 1, pos.height ?? 1);
         } else if (container instanceof Gtk.Fixed) {
-            container.put(w, Math.round(child._p.x ?? 0), Math.round(child._p.y ?? 0));
+            container.put(w, Math.round(child._gnoshP.x ?? 0), Math.round(child._gnoshP.y ?? 0));
         } else if (container instanceof Gtk.FlowBox) {
             container.insert(w, index);
         } else if (container instanceof Gtk.Bin) {
@@ -966,33 +966,33 @@ export const Actor = GObject.registerClass({
     }
 
     _gnoshNextGridPos(child) {
-        const lm = this._p.layout_manager;
-        const index = this._children.indexOf(child);
+        const lm = this._gnoshP.layout_manager;
+        const index = this._gnoshChildren.indexOf(child);
         const vertical = lm?.orientation === E.Orientation.VERTICAL;
-        child._gridPos = vertical ? {left: 0, top: index} : {left: index, top: 0};
-        return child._gridPos;
+        child._gnoshGridPos = vertical ? {left: 0, top: index} : {left: index, top: 0};
+        return child._gnoshGridPos;
     }
 
     _gnoshRepackChild(child) {
-        if (child._parent === this)
-            this._gnoshPack(child, this._children.indexOf(child));
+        if (child._gnoshParent === this)
+            this._gnoshPack(child, this._gnoshChildren.indexOf(child));
     }
 
     _gnoshMoveFixedChild(child) {
         const container = this._gnoshChildContainer;
-        if (container instanceof Gtk.Fixed && child._outer.get_parent() === container)
-            container.move(child._outer, Math.round(child._p.x ?? 0), Math.round(child._p.y ?? 0));
+        if (container instanceof Gtk.Fixed && child._gnoshOuter.get_parent() === container)
+            container.move(child._gnoshOuter, Math.round(child._gnoshP.x ?? 0), Math.round(child._gnoshP.y ?? 0));
     }
 
     _gnoshSetMapped(mapped) {
-        if (this._p.mapped === mapped)
+        if (this._gnoshP.mapped === mapped)
             return;
-        this._p.mapped = mapped;
+        this._gnoshP.mapped = mapped;
         this.notify('mapped');
     }
 
     _gnoshCrossing(enter, gdkEvent) {
-        if (this._destroyed)
+        if (this._gnoshDestroyed)
             return false;
         // Ignore crossings into/out of our own children.
         const detail = gdkEvent.get_event_type() === Gdk.EventType.ENTER_NOTIFY ||
@@ -1000,8 +1000,8 @@ export const Actor = GObject.registerClass({
             ? gdkEvent.crossing?.detail ?? null : null;
         if (detail === Gdk.NotifyType.INFERIOR)
             return false;
-        if (this._p.has_pointer !== enter) {
-            this._p.has_pointer = enter;
+        if (this._gnoshP.has_pointer !== enter) {
+            this._gnoshP.has_pointer = enter;
             this.notify('has-pointer');
         }
         this._gnoshHoverChanged?.(enter);
@@ -1009,15 +1009,15 @@ export const Actor = GObject.registerClass({
     }
 
     _gnoshGtkEvent(signal, gdkEvent) {
-        if (this._destroyed)
+        if (this._gnoshDestroyed)
             return false;
         // Events bubble through GTK (inner widget, then our EventBox);
         // dispatch each event to an actor once.
         const [, rx, ry] = gdkEvent.get_root_coords();
         const key = `${gdkEvent.get_event_type()}:${gdkEvent.get_time()}:${rx}:${ry}`;
-        if (this._lastGdkEvent === key)
+        if (this._gnoshLastGdkEvent === key)
             return false;
-        this._lastGdkEvent = key;
+        this._gnoshLastGdkEvent = key;
         return this._gnoshDispatch(signal, Event.fromGdk(gdkEvent, this));
     }
 
@@ -1026,7 +1026,7 @@ export const Actor = GObject.registerClass({
      * specific signal, then the specific vfunc. Returns true when handled.
      */
     _gnoshDispatch(signal, event) {
-        if (!this._p.reactive || this._destroyed)
+        if (!this._gnoshP.reactive || this._gnoshDestroyed)
             return false;
         try {
             if (this.emit('event', event))
@@ -1148,11 +1148,11 @@ export const Actor = GObject.registerClass({
     }
 
     _gnoshPreferred(horizontal, forSize) {
-        if (!this._outer)
+        if (!this._gnoshOuter)
             return [0, 0];
         const [min, nat] = horizontal
-            ? forSize >= 0 ? this._outer.get_preferred_width_for_height(forSize) : this._outer.get_preferred_width()
-            : forSize >= 0 ? this._outer.get_preferred_height_for_width(forSize) : this._outer.get_preferred_height();
+            ? forSize >= 0 ? this._gnoshOuter.get_preferred_width_for_height(forSize) : this._gnoshOuter.get_preferred_width()
+            : forSize >= 0 ? this._gnoshOuter.get_preferred_height_for_width(forSize) : this._gnoshOuter.get_preferred_height();
         return [min, nat];
     }
 
@@ -1173,19 +1173,19 @@ export const Actor = GObject.registerClass({
             warnOnce(`nonactor-${child?.constructor?.name}`, `cannot add ${child?.constructor?.name} to an actor`);
             return;
         }
-        if (child._parent) {
-            if (child._parent === this) {
+        if (child._gnoshParent) {
+            if (child._gnoshParent === this) {
                 this.set_child_at_index(child, index);
                 return;
             }
             warnOnce('reparent', 'adding an actor that already has a parent; removing it first');
-            child._parent.remove_child(child);
+            child._gnoshParent.remove_child(child);
         }
-        const n = this._children.length;
+        const n = this._gnoshChildren.length;
         const at = index < 0 || index > n ? n : index;
-        this._children.splice(at, 0, child);
-        child._parent = this;
-        if (child._p.show_on_set_parent !== false && !child._p.visible)
+        this._gnoshChildren.splice(at, 0, child);
+        child._gnoshParent = this;
+        if (child._gnoshP.show_on_set_parent !== false && !child._gnoshP.visible)
             child.visible = true;
         this._gnoshPack(child, at);
         child.emit('parent-set', null);
@@ -1195,29 +1195,29 @@ export const Actor = GObject.registerClass({
     }
 
     insert_child_above(child, sibling) {
-        const i = sibling ? this._children.indexOf(sibling) : this._children.length - 1;
+        const i = sibling ? this._gnoshChildren.indexOf(sibling) : this._gnoshChildren.length - 1;
         this.insert_child_at_index(child, i < 0 ? -1 : i + 1);
     }
 
     insert_child_below(child, sibling) {
-        const i = sibling ? this._children.indexOf(sibling) : 0;
+        const i = sibling ? this._gnoshChildren.indexOf(sibling) : 0;
         this.insert_child_at_index(child, i < 0 ? 0 : i);
     }
 
     remove_child(child) {
-        const i = this._children.indexOf(child);
+        const i = this._gnoshChildren.indexOf(child);
         if (i < 0)
             return;
-        this._children.splice(i, 1);
-        child._parent = null;
-        if (this._binMain === child)
-            this._binMain = null;
-        const w = child._outer;
+        this._gnoshChildren.splice(i, 1);
+        child._gnoshParent = null;
+        if (this._gnoshBinMain === child)
+            this._gnoshBinMain = null;
+        const w = child._gnoshOuter;
         if (this._gnoshUnpack)
             this._gnoshUnpack(child);
         else if (w?.get_parent())
             w.get_parent().remove(w);
-        if (!child._destroyed) {
+        if (!child._gnoshDestroyed) {
             child.emit('parent-set', this);
             child.vfunc_parent_set(this);
         }
@@ -1230,17 +1230,17 @@ export const Actor = GObject.registerClass({
     }
 
     remove_all_children() {
-        for (const child of [...this._children])
+        for (const child of [...this._gnoshChildren])
             this.remove_child(child);
     }
 
     destroy_all_children() {
-        for (const child of [...this._children])
+        for (const child of [...this._gnoshChildren])
             child.destroy();
     }
 
     replace_child(oldChild, newChild) {
-        const i = this._children.indexOf(oldChild);
+        const i = this._gnoshChildren.indexOf(oldChild);
         if (i < 0)
             return;
         this.remove_child(oldChild);
@@ -1248,51 +1248,51 @@ export const Actor = GObject.registerClass({
     }
 
     set_child_at_index(child, index) {
-        const i = this._children.indexOf(child);
+        const i = this._gnoshChildren.indexOf(child);
         if (i < 0)
             return;
-        this._children.splice(i, 1);
-        const n = this._children.length;
+        this._gnoshChildren.splice(i, 1);
+        const n = this._gnoshChildren.length;
         const at = index < 0 || index > n ? n : index;
-        this._children.splice(at, 0, child);
+        this._gnoshChildren.splice(at, 0, child);
         const container = this._gnoshChildContainer;
         if (container instanceof Gtk.Box)
-            container.reorder_child(child._outer, at);
+            container.reorder_child(child._gnoshOuter, at);
         else
             this._gnoshPack(child, at);
         this._gnoshChildrenChanged?.();
     }
 
     set_child_above_sibling(child, sibling) {
-        const j = sibling ? this._children.indexOf(sibling) : this._children.length - 1;
-        const i = this._children.indexOf(child);
-        this.set_child_at_index(child, sibling ? (i < j ? j : j + 1) : this._children.length - 1);
+        const j = sibling ? this._gnoshChildren.indexOf(sibling) : this._gnoshChildren.length - 1;
+        const i = this._gnoshChildren.indexOf(child);
+        this.set_child_at_index(child, sibling ? (i < j ? j : j + 1) : this._gnoshChildren.length - 1);
     }
 
     set_child_below_sibling(child, sibling) {
-        const j = sibling ? this._children.indexOf(sibling) : 0;
-        const i = this._children.indexOf(child);
+        const j = sibling ? this._gnoshChildren.indexOf(sibling) : 0;
+        const i = this._gnoshChildren.indexOf(child);
         this.set_child_at_index(child, sibling ? (i < j ? j - 1 : j) : 0);
     }
 
     get_children() {
-        return [...this._children];
+        return [...this._gnoshChildren];
     }
 
     get_n_children() {
-        return this._children.length;
+        return this._gnoshChildren.length;
     }
 
     get_child_at_index(i) {
-        return this._children[i] ?? null;
+        return this._gnoshChildren[i] ?? null;
     }
 
     get_first_child() {
-        return this._children[0] ?? null;
+        return this._gnoshChildren[0] ?? null;
     }
 
     get_last_child() {
-        return this._children[this._children.length - 1] ?? null;
+        return this._gnoshChildren[this._gnoshChildren.length - 1] ?? null;
     }
 
     get first_child() {
@@ -1304,25 +1304,25 @@ export const Actor = GObject.registerClass({
     }
 
     get_next_sibling() {
-        if (!this._parent)
+        if (!this._gnoshParent)
             return null;
-        const kids = this._parent._children;
+        const kids = this._gnoshParent._gnoshChildren;
         return kids[kids.indexOf(this) + 1] ?? null;
     }
 
     get_previous_sibling() {
-        if (!this._parent)
+        if (!this._gnoshParent)
             return null;
-        const kids = this._parent._children;
+        const kids = this._gnoshParent._gnoshChildren;
         return kids[kids.indexOf(this) - 1] ?? null;
     }
 
     get_parent() {
-        return this._parent;
+        return this._gnoshParent;
     }
 
     contains(descendant) {
-        for (let a = descendant; a; a = a._parent) {
+        for (let a = descendant; a; a = a._gnoshParent) {
             if (a === this)
                 return true;
         }
@@ -1331,8 +1331,8 @@ export const Actor = GObject.registerClass({
 
     get_stage() {
         let a = this;
-        while (a._parent)
-            a = a._parent;
+        while (a._gnoshParent)
+            a = a._gnoshParent;
         return a._gnoshIsStage ? a : globalThis.global?.stage ?? null;
     }
 
@@ -1348,7 +1348,7 @@ export const Actor = GObject.registerClass({
 
     show_all() {
         this.show();
-        this._children.forEach(c => c.show_all?.());
+        this._gnoshChildren.forEach(c => c.show_all?.());
     }
 
     is_visible() {
@@ -1364,11 +1364,11 @@ export const Actor = GObject.registerClass({
     }
 
     is_mapped() {
-        return this._p.mapped ?? false;
+        return this._gnoshP.mapped ?? false;
     }
 
     is_realized() {
-        return this._outer?.get_realized() ?? false;
+        return this._gnoshOuter?.get_realized() ?? false;
     }
 
     get realized() {
@@ -1384,36 +1384,36 @@ export const Actor = GObject.registerClass({
     unrealize() {}
 
     destroy() {
-        if (this._destroyed)
+        if (this._gnoshDestroyed)
             return;
-        this._destroyed = true;
+        this._gnoshDestroyed = true;
         try {
             this.emit('destroy');
         } catch (e) {
             logError(e, 'gnosh: destroy handler');
         }
         this.vfunc_destroy();
-        for (const child of [...this._children])
+        for (const child of [...this._gnoshChildren])
             child.destroy();
-        this._parent?.remove_child(this);
-        for (const t of this._transitions.values())
+        this._gnoshParent?.remove_child(this);
+        for (const t of this._gnoshTransitions.values())
             t.stop?.();
-        this._transitions.clear();
-        if (this._outer) {
-            const w = this._outer;
-            this._outer = null;
+        this._gnoshTransitions.clear();
+        if (this._gnoshOuter) {
+            const w = this._gnoshOuter;
+            this._gnoshOuter = null;
             w.destroy();
         }
         this.run_dispose();
     }
 
     queue_relayout() {
-        this._outer?.queue_resize();
+        this._gnoshOuter?.queue_resize();
         this.emit('queue-relayout');
     }
 
     queue_redraw() {
-        this._inner?.queue_draw();
+        this._gnoshInner?.queue_draw();
     }
 
     queue_redraw_with_clip() {
@@ -1423,9 +1423,9 @@ export const Actor = GObject.registerClass({
     // --- geometry ---
 
     get_allocation_box() {
-        if (!this._outer?.get_realized())
+        if (!this._gnoshOuter?.get_realized())
             return new ActorBox(0, 0, 0, 0);
-        const a = this._outer.get_allocation();
+        const a = this._gnoshOuter.get_allocation();
         const [x, y] = this.get_transformed_position();
         return new ActorBox(x, y, x + a.width, y + a.height);
     }
@@ -1435,11 +1435,11 @@ export const Actor = GObject.registerClass({
     }
 
     get_width() {
-        return this._outer?.get_realized() ? this._outer.get_allocated_width() : Math.max(this._p.width ?? 0, 0);
+        return this._gnoshOuter?.get_realized() ? this._gnoshOuter.get_allocated_width() : Math.max(this._gnoshP.width ?? 0, 0);
     }
 
     get_height() {
-        return this._outer?.get_realized() ? this._outer.get_allocated_height() : Math.max(this._p.height ?? 0, 0);
+        return this._gnoshOuter?.get_realized() ? this._gnoshOuter.get_allocated_height() : Math.max(this._gnoshP.height ?? 0, 0);
     }
 
     get_size() {
@@ -1460,11 +1460,11 @@ export const Actor = GObject.registerClass({
     }
 
     get_x() {
-        return this._p.x ?? 0;
+        return this._gnoshP.x ?? 0;
     }
 
     get_y() {
-        return this._p.y ?? 0;
+        return this._gnoshP.y ?? 0;
     }
 
     set_x(x) {
@@ -1489,7 +1489,7 @@ export const Actor = GObject.registerClass({
     }
 
     get_transformed_position() {
-        const w = this._outer;
+        const w = this._gnoshOuter;
         if (!w?.get_realized())
             return [0, 0];
         const top = w.get_toplevel();
@@ -1520,7 +1520,7 @@ export const Actor = GObject.registerClass({
 
     /** Root (screen) coordinates -> coordinates inside this actor. */
     _gnoshLocalCoords(rootX, rootY) {
-        const w = this._outer;
+        const w = this._gnoshOuter;
         const win = w?.get_window();
         if (!win)
             return null;
@@ -1743,8 +1743,8 @@ export const Actor = GObject.registerClass({
 
     set_background_color(c) {
         this.background_color = c;
-        if (this._inner) {
-            this._bgState ??= {};
+        if (this._gnoshInner) {
+            this._gnoshBgState ??= {};
             const css = c ? `background-color: rgba(${c.red},${c.green},${c.blue},${(c.alpha ?? 255) / 255});` : '';
             this._gnoshExtraCss('background', css);
         }
@@ -1781,11 +1781,11 @@ export const Actor = GObject.registerClass({
     }
 
     get_resource_scale() {
-        return this._outer?.get_scale_factor() ?? 1;
+        return this._gnoshOuter?.get_scale_factor() ?? 1;
     }
 
     get_accessible() {
-        return this._outer?.get_accessible() ?? null;
+        return this._gnoshOuter?.get_accessible() ?? null;
     }
 
     set_accessible_name(n) {
@@ -1864,64 +1864,64 @@ export const Actor = GObject.registerClass({
     restore_easing_state() {}
 
     remove_all_transitions() {
-        for (const t of this._transitions.values())
+        for (const t of this._gnoshTransitions.values())
             t.stop?.();
-        this._transitions.clear();
+        this._gnoshTransitions.clear();
     }
 
     remove_transition(name) {
-        this._transitions.get(name)?.stop?.();
-        this._transitions.delete(name);
+        this._gnoshTransitions.get(name)?.stop?.();
+        this._gnoshTransitions.delete(name);
     }
 
     get_transition(name) {
-        return this._transitions.get(name) ?? null;
+        return this._gnoshTransitions.get(name) ?? null;
     }
 
     add_transition(name, t) {
-        this._transitions.set(name, t);
+        this._gnoshTransitions.set(name, t);
     }
 
     // Effects, actions and constraints are kept so code that looks them up
     // keeps working; they do not change rendering.
     add_effect(effect) {
-        this.add_effect_with_name(effect?.name ?? `effect${this._effects.size}`, effect);
+        this.add_effect_with_name(effect?.name ?? `effect${this._gnoshEffects.size}`, effect);
     }
 
     add_effect_with_name(name, effect) {
-        this._effects.set(name, effect);
+        this._gnoshEffects.set(name, effect);
         effect?.set_actor?.(this);
     }
 
     remove_effect(effect) {
-        for (const [k, v] of this._effects) {
+        for (const [k, v] of this._gnoshEffects) {
             if (v === effect)
-                this._effects.delete(k);
+                this._gnoshEffects.delete(k);
         }
     }
 
     remove_effect_by_name(name) {
-        this._effects.delete(name);
+        this._gnoshEffects.delete(name);
     }
 
     get_effect(name) {
-        return this._effects.get(name) ?? null;
+        return this._gnoshEffects.get(name) ?? null;
     }
 
     get_effects() {
-        return [...this._effects.values()];
+        return [...this._gnoshEffects.values()];
     }
 
     clear_effects() {
-        this._effects.clear();
+        this._gnoshEffects.clear();
     }
 
     has_effects() {
-        return this._effects.size > 0;
+        return this._gnoshEffects.size > 0;
     }
 
     add_action(action) {
-        this._actions.push(action);
+        this._gnoshActions.push(action);
         action?._gnoshAttach?.(this);
     }
 
@@ -1935,30 +1935,30 @@ export const Actor = GObject.registerClass({
     }
 
     remove_action(action) {
-        this._actions = this._actions.filter(a => a !== action);
+        this._gnoshActions = this._gnoshActions.filter(a => a !== action);
         action?._gnoshDetach?.(this);
     }
 
     remove_action_by_name(name) {
-        for (const a of this._actions.filter(x => x.name === name))
+        for (const a of this._gnoshActions.filter(x => x.name === name))
             this.remove_action(a);
     }
 
     get_action(name) {
-        return this._actions.find(a => a.name === name) ?? null;
+        return this._gnoshActions.find(a => a.name === name) ?? null;
     }
 
     get_actions() {
-        return [...this._actions];
+        return [...this._gnoshActions];
     }
 
     clear_actions() {
-        for (const a of [...this._actions])
+        for (const a of [...this._gnoshActions])
             this.remove_action(a);
     }
 
     add_constraint(c) {
-        this._constraints.push(c);
+        this._gnoshConstraints.push(c);
     }
 
     add_constraint_with_name(name, c) {
@@ -1967,35 +1967,35 @@ export const Actor = GObject.registerClass({
     }
 
     remove_constraint(c) {
-        this._constraints = this._constraints.filter(x => x !== c);
+        this._gnoshConstraints = this._gnoshConstraints.filter(x => x !== c);
     }
 
     remove_constraint_by_name(name) {
-        this._constraints = this._constraints.filter(x => x.name !== name);
+        this._gnoshConstraints = this._gnoshConstraints.filter(x => x.name !== name);
     }
 
     get_constraint(name) {
-        return this._constraints.find(c => c.name === name) ?? null;
+        return this._gnoshConstraints.find(c => c.name === name) ?? null;
     }
 
     get_constraints() {
-        return [...this._constraints];
+        return [...this._gnoshConstraints];
     }
 
     clear_constraints() {
-        this._constraints = [];
+        this._gnoshConstraints = [];
     }
 
     grab_key_focus() {
-        const w = this._gnoshFocusWidget ?? this._inner;
+        const w = this._gnoshFocusWidget ?? this._gnoshInner;
         if (w?.get_can_focus())
             w.grab_focus();
         else
-            this._outer?.grab_focus();
+            this._gnoshOuter?.grab_focus();
     }
 
     has_key_focus() {
-        return (this._gnoshFocusWidget ?? this._inner)?.has_focus ?? false;
+        return (this._gnoshFocusWidget ?? this._gnoshInner)?.has_focus ?? false;
     }
 
     grab() {
@@ -2015,15 +2015,15 @@ export const Actor = GObject.registerClass({
     }
 
     get_pango_context() {
-        return this._inner?.get_pango_context() ?? null;
+        return this._gnoshInner?.get_pango_context() ?? null;
     }
 
     create_pango_context() {
-        return this._inner?.create_pango_context() ?? null;
+        return this._gnoshInner?.create_pango_context() ?? null;
     }
 
     create_pango_layout(text) {
-        return this._inner?.create_pango_layout(text) ?? null;
+        return this._gnoshInner?.create_pango_layout(text) ?? null;
     }
 
     is_in_clone_paint() {
@@ -2045,8 +2045,8 @@ export const Actor = GObject.registerClass({
     }
 
     _gnoshExtraCss(slot, css) {
-        this._extraCss ??= {};
-        this._extraCss[slot] = css;
+        this._gnoshExtraCssSlots ??= {};
+        this._gnoshExtraCssSlots[slot] = css;
         this._gnoshApplyCss?.();
     }
 

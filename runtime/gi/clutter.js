@@ -118,7 +118,7 @@ export const Stage = GObject.registerClass({
     }
 
     get_key_focus() {
-        return this._p.key_focus ?? null;
+        return this._gnoshP.key_focus ?? null;
     }
 
     set_key_focus(actor) {
@@ -126,7 +126,7 @@ export const Stage = GObject.registerClass({
             console.warn(`gnosh: Stage.set_key_focus() called with ${actor?.constructor?.name}; ignoring`);
             return;
         }
-        this._p.key_focus = actor ?? null;
+        this._gnoshP.key_focus = actor ?? null;
         actor?.grab_key_focus?.();
         this.notify('key-focus');
     }
@@ -247,7 +247,7 @@ const ActorMeta = GObject.registerClass({
     Properties: makeProperties({'name': P.string(null), 'enabled': P.bool(true)}),
 }, class ActorMeta extends GObject.Object {
     _init(params = {}) {
-        this._p = {};
+        this._gnoshP = {};
         super._init(params);
         this._gnoshConstructed = true;
     }
@@ -818,7 +818,7 @@ export const Timeline = GObject.registerClass({
     },
 }, class Timeline extends GObject.Object {
     _init(params = {}) {
-        this._p = {};
+        this._gnoshP = {};
         super._init(params);
         this._gnoshConstructed = true;
         this._elapsed = 0;
