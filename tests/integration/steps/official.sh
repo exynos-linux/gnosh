@@ -1,3 +1,4 @@
+# shellcheck shell=sh
 # Steps for run-phosh.sh: official GNOME extensions in headless Phosh.
 sleep 8
 status status

@@ -18,6 +18,6 @@ if [ -n "${EXT_SRC:-}" ]; then
     mounts="$mounts -v $EXT_SRC:/ext:ro"
 fi
 # shellcheck disable=SC2086 # $mounts and $steps_arg are word lists
-exec podman run --rm --userns=keep-id --security-opt seccomp=unconfined --security-opt label=disable \
+exec podman run --rm --userns=keep-id:uid=1000,gid=1000 --security-opt seccomp=unconfined --security-opt label=disable \
     -e EXTENSIONS="${EXTENSIONS:-}" -e EXT_SRC="${EXT_SRC:+/ext}" \
     $mounts "$IMAGE" /gnosh/tests/integration/run-phosh.sh $steps_arg

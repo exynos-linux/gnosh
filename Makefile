@@ -49,7 +49,7 @@ dist: modules
 	@echo "built build/gnosh-$(VERSION).tar.gz"
 
 lint:
-	shellcheck setup.sh tests/integration/*.sh tools/*.sh
+	shellcheck -s sh setup.sh tests/integration/*.sh tests/integration/steps/*.sh tests/device/*.sh tools/*.sh
 	python3 -m py_compile bin/gnosh
 	python3 -m json.tool runtime/data/compat.json >/dev/null
 	tools/check-js-syntax.sh

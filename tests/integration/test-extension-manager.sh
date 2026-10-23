@@ -15,7 +15,11 @@ echo "== setup.sh (with Extension Manager)"
 sh /gnosh/setup.sh --no-gext --no-auto-update 2>&1 | tee "$OUT/setup.log"
 flatpak --user list --app | tee "$OUT/flatpak-list.txt"
 
-dropin=$(ls "$HOME"/.config/systemd/user/*.service.d/50-gnosh.conf | head -n1)
+dropin=""
+for f in "$HOME"/.config/systemd/user/*.service.d/50-gnosh.conf; do
+    [ -f "$f" ] && { dropin=$f; break; }
+done
+[ -n "$dropin" ] || { echo "setup.sh wrote no drop-in" >&2; exit 1; }
 module=$(sed -n 's/^Environment=GTK_MODULES=//p' "$dropin")
 export WLR_BACKENDS=headless WLR_RENDERER=pixman WLR_HEADLESS_OUTPUTS=1
 export XDG_CURRENT_DESKTOP=Phosh:GNOME XDG_SESSION_TYPE=wayland NO_AT_BRIDGE=1 GLYCIN_DISABLE_SANDBOX=1

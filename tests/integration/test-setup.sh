@@ -26,9 +26,13 @@ else
 fi
 
 echo "== installed files"
+# shellcheck disable=SC2012 # human-readable listing for the test log
 ls -la "$HOME/.local/bin" "$HOME/.local/lib/gnosh" "$HOME/.local/share/gnosh" | tee "$OUT/files.txt"
 gnosh --version
-dropin=$(ls "$HOME"/.config/systemd/user/*.service.d/50-gnosh.conf 2>/dev/null | head -n1 || true)
+dropin=""
+for f in "$HOME"/.config/systemd/user/*.service.d/50-gnosh.conf; do
+    [ -f "$f" ] && { dropin=$f; break; }
+done
 echo "drop-in: ${dropin:-none}"
 [ -n "$dropin" ] && cat "$dropin"
 module=$(sed -n 's/^Environment=GTK_MODULES=//p' "$dropin")

@@ -1,3 +1,4 @@
+# shellcheck shell=sh
 # Functional checks (EXTENSIONS should include appindicatorsupport, clipboard-indicator, caffeine).
 sleep 8
 js 'globalThis.__gnosh.openDialogs?.forEach(d => d.close()); "ok"' >/dev/null
