@@ -57,6 +57,31 @@ async function registerShimResources() {
     return files.size;
 }
 
+function watchUserExtensions(load) {
+    const dir = Gio.File.new_for_path(GLib.build_filenamev([GLib.get_user_data_dir(), 'gnome-shell', 'extensions']));
+    GLib.mkdir_with_parents(dir.get_path(), 0o755);
+    const monitor = dir.monitor_directory(Gio.FileMonitorFlags.WATCH_MOVES, null);
+    const pending = new Map();
+    monitor.connect('changed', (m, file, other, event) => {
+        if (![Gio.FileMonitorEvent.CREATED, Gio.FileMonitorEvent.MOVED_IN, Gio.FileMonitorEvent.RENAMED].includes(event))
+            return;
+        const target = event === Gio.FileMonitorEvent.RENAMED ? other : file;
+        const uuid = target?.get_basename();
+        if (!uuid || uuid.startsWith('.'))
+            return;
+        // Give the installer a moment to finish writing files.
+        if (pending.has(uuid))
+            GLib.source_remove(pending.get(uuid));
+        pending.set(uuid, GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 2, () => {
+            pending.delete(uuid);
+            if (!globalThis.__gnosh.main.extensionManager.lookup(uuid))
+                load(uuid).catch(e => logError(e, `gnosh: loading ${uuid}`));
+            return GLib.SOURCE_REMOVE;
+        }));
+    });
+    globalThis.__gnosh.extensionsMonitor = monitor;
+}
+
 function markStableLater() {
     // The GTK module counts starts that never became stable; clear the
     // counter once gnosh has been running for a while.
@@ -121,11 +146,32 @@ async function start() {
     bridge.watchActivities(global.display);
 
     const {openPrefs} = await import('./prefs.js');
+    const ExtensionUtils = await import('resource:///org/gnome/shell/misc/extensionUtils.js');
+    // Load an extension installed while Phosh runs (gnosh install, gext).
+    globalThis.__gnosh.loadUserExtension = async uuid => {
+        const manager = Main.extensionManager;
+        const dir = Gio.File.new_for_path(GLib.build_filenamev([global.userdatadir, 'extensions', uuid]));
+        if (!dir.get_child('metadata.json').query_exists(null))
+            return false;
+        const existing = manager.lookup(uuid);
+        if (existing) {
+            if (existing.isImported) {
+                // ES modules cannot be re-imported in a running shell.
+                existing.hasUpdate = true;
+                return false;
+            }
+            await manager.unloadExtension(existing);
+        }
+        const extension = manager.createExtensionObject(uuid, dir, ExtensionUtils.ExtensionType.PER_USER);
+        await manager.loadExtension(extension);
+        return true;
+    };
     const {exportServices} = await import('./dbus.js');
     // Keep the exported objects alive; GJS unexports them when collected.
     globalThis.__gnosh.dbus = exportServices({
         Main,
         bridge,
+        loadUserExtension: globalThis.__gnosh.loadUserExtension,
         Config: await import('resource:///org/gnome/shell/misc/config.js'),
         ExtensionUtils: await import('resource:///org/gnome/shell/misc/extensionUtils.js'),
         Downloader: await import('resource:///org/gnome/shell/ui/extensionDownloader.js'),
@@ -133,6 +179,7 @@ async function start() {
     });
 
     Main.extensionManager.init();
+    watchUserExtensions(globalThis.__gnosh.loadUserExtension);
     markStableLater();
     console.log('gnosh: ready');
 }

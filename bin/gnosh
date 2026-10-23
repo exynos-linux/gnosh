@@ -1,0 +1,937 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
+"""gnosh: run GNOME Shell extensions in Phosh.
+
+The command-line manager. Talks to the gnosh runtime inside Phosh over
+D-Bus (io.github.dixonsolutions.Gnosh and org.gnome.Shell.Extensions),
+installs extensions from extensions.gnome.org, and keeps gnosh itself up
+to date from GitHub releases. Python 3 standard library only.
+"""
+
+import argparse
+import hashlib
+import io
+import json
+import os
+import platform
+import re
+import shutil
+import subprocess
+import sys
+import tarfile
+import tempfile
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+import zipfile
+from pathlib import Path
+
+VERSION = "dev"  # replaced at install time
+REPO = "dixonSolutions/gnosh"
+EGO = "https://extensions.gnome.org"
+GNOSH_BUS = "io.github.dixonsolutions.Gnosh"
+GNOSH_PATH = "/io/github/dixonsolutions/Gnosh"
+EXT_BUS = "org.gnome.Shell.Extensions"
+EXT_PATH = "/org/gnome/Shell/Extensions"
+MIN_SHELL, MAX_SHELL = 45, 51
+
+HOME = Path.home()
+XDG_DATA = Path(os.environ.get("XDG_DATA_HOME") or HOME / ".local/share")
+XDG_CONFIG = Path(os.environ.get("XDG_CONFIG_HOME") or HOME / ".config")
+XDG_CACHE = Path(os.environ.get("XDG_CACHE_HOME") or HOME / ".cache")
+XDG_RUNTIME = Path(os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}")
+PREFIX = Path(os.environ.get("GNOSH_PREFIX") or HOME / ".local")
+RUNTIME_DIR = XDG_DATA / "gnosh" / "runtime"
+MODULE_PATH = PREFIX / "lib" / "gnosh" / "libgnosh-phosh.so"
+BIN_PATH = PREFIX / "bin" / "gnosh"
+CONFIG_PATH = XDG_CONFIG / "gnosh" / "config.json"
+EXT_DIR = XDG_DATA / "gnome-shell" / "extensions"
+SYSTEMD_USER = XDG_CONFIG / "systemd" / "user"
+PHOSH_UNITS = ["mobi.phosh.Shell.service", "sm.puri.Phosh.service"]
+DROPIN_NAME = "50-gnosh.conf"
+
+COLOR = sys.stdout.isatty() and not os.environ.get("NO_COLOR")
+
+
+def c(text, code):
+    return f"\033[{code}m{text}\033[0m" if COLOR else text
+
+
+def info(msg):
+    print(msg)
+
+
+def warn(msg):
+    print(c("warning: ", "33") + msg, file=sys.stderr)
+
+
+def die(msg, code=1):
+    print(c("error: ", "31") + msg, file=sys.stderr)
+    sys.exit(code)
+
+
+# --- environment -----------------------------------------------------------
+
+
+def phosh_running():
+    """True if a phosh process runs for this user."""
+    uid = os.getuid()
+    for pid in os.listdir("/proc"):
+        if not pid.isdigit():
+            continue
+        try:
+            if os.stat(f"/proc/{pid}").st_uid != uid:
+                continue
+            with open(f"/proc/{pid}/comm") as f:
+                if f.read().strip() == "phosh":
+                    return int(pid)
+        except OSError:
+            continue
+    return None
+
+
+def in_phosh_session():
+    """gnosh only works in Phosh sessions (not GNOME, KDE, ...)."""
+    if os.environ.get("GNOSH_FORCE") == "1":  # tests and CI
+        return True
+    desktop = os.environ.get("XDG_CURRENT_DESKTOP", "")
+    if desktop:
+        return "phosh" in desktop.lower()
+    # No desktop in the environment (e.g. ssh): accept if Phosh runs for us.
+    return phosh_running() is not None
+
+
+def require_phosh():
+    if not in_phosh_session():
+        desktop = os.environ.get("XDG_CURRENT_DESKTOP") or "no Phosh session"
+        die(f"gnosh only works in Phosh; this session is {desktop}.\n"
+            "Run it from a Phosh session (or over ssh while Phosh runs for your user).", 2)
+
+
+def read_config():
+    try:
+        return json.loads(CONFIG_PATH.read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def write_config(cfg):
+    CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    tmp = CONFIG_PATH.with_suffix(".tmp")
+    tmp.write_text(json.dumps(cfg, indent=2, sort_keys=True) + "\n")
+    tmp.replace(CONFIG_PATH)
+
+
+def emulated_shell_version():
+    return str(read_config().get("shellVersion", "50.0"))
+
+
+def run(cmd, check=False, capture=True, timeout=60):
+    try:
+        res = subprocess.run(cmd, capture_output=capture, text=True, timeout=timeout)
+    except FileNotFoundError:
+        if check:
+            die(f"{cmd[0]} not found")
+        return subprocess.CompletedProcess(cmd, 127, "", f"{cmd[0]} not found")
+    except subprocess.TimeoutExpired:
+        if check:
+            die(f"{' '.join(cmd)} timed out")
+        return subprocess.CompletedProcess(cmd, 124, "", "timeout")
+    if check and res.returncode != 0:
+        die(f"{' '.join(cmd)} failed: {res.stderr.strip()}")
+    return res
+
+
+# --- D-Bus (via gdbus) -------------------------------------------------------
+
+
+def gdbus_call(dest, path, method, *args, timeout=25):
+    cmd = ["gdbus", "call", "--session", "--timeout", str(timeout), "--dest", dest,
+           "--object-path", path, "--method", method, *args]
+    res = run(cmd, timeout=timeout + 5)
+    if res.returncode != 0:
+        return None, res.stderr.strip()
+    return res.stdout.strip(), None
+
+
+def parse_gvariant_string(out):
+    """('...',) -> str. gdbus prints GVariant text; decode the string literal."""
+    m = re.match(r"^\((['\"])(.*)\1,?\)$", out, re.S)
+    if not m:
+        return out
+    body = m.group(2)
+    # GVariant text escapes are close to Python's
+    return bytes(body, "utf-8").decode("unicode_escape").encode("latin-1").decode("utf-8")
+
+
+def runtime_status():
+    out, err = gdbus_call(GNOSH_BUS, GNOSH_PATH, f"{GNOSH_BUS}.GetStatus")
+    if out is None:
+        return None
+    try:
+        return json.loads(parse_gvariant_string(out))
+    except ValueError:
+        return None
+
+
+def gvariant_str(s):
+    return "'" + s.replace("\\", "\\\\").replace("'", "\\'") + "'"
+
+
+def runtime_load(uuid):
+    """Ask the running gnosh to load (or reload) an extension directory."""
+    out, err = gdbus_call(GNOSH_BUS, GNOSH_PATH, f"{GNOSH_BUS}.LoadExtension", gvariant_str(uuid))
+    return out is not None
+
+
+# --- extensions on disk --------------------------------------------------------
+
+
+def system_ext_dirs():
+    dirs = os.environ.get("XDG_DATA_DIRS", "/usr/local/share:/usr/share").split(":")
+    return [Path(d) / "gnome-shell" / "extensions" for d in dirs if d]
+
+
+def installed_extensions():
+    out = {}
+    for base, kind in [(d, "system") for d in reversed(system_ext_dirs())] + [(EXT_DIR, "user")]:
+        if not base.is_dir():
+            continue
+        for d in sorted(base.iterdir()):
+            meta = d / "metadata.json"
+            if meta.is_file():
+                try:
+                    m = json.loads(meta.read_text())
+                except ValueError:
+                    continue
+                out[d.name] = {"uuid": d.name, "name": m.get("name", d.name), "version": m.get("version"),
+                               "shellVersion": m.get("shell-version", []), "path": str(d), "type": kind,
+                               "description": m.get("description", "")}
+    return out
+
+
+def gsettings_strv(key):
+    res = run(["gsettings", "get", "org.gnome.shell", key])
+    if res.returncode != 0:
+        return []
+    text = res.stdout.strip()
+    if text.startswith("@as"):
+        text = text[3:].strip()
+    return re.findall(r"'((?:[^'\\]|\\.)*)'", text)
+
+
+def gsettings_set_strv(key, values):
+    value = "[" + ", ".join(gvariant_str(v) for v in values) + "]"
+    run(["gsettings", "set", "org.gnome.shell", key, value], check=True)
+
+
+def compile_schemas(ext_path):
+    schemas = Path(ext_path) / "schemas"
+    if not schemas.is_dir() or not list(schemas.glob("*.gschema.xml")):
+        return True
+    res = run(["glib-compile-schemas", str(schemas)])
+    if res.returncode != 0:
+        warn(f"could not compile schemas for {Path(ext_path).name}: {res.stderr.strip() or 'glib-compile-schemas missing'}"
+             " (gnosh will retry when the extension loads)")
+        return False
+    return True
+
+
+# --- extensions.gnome.org ------------------------------------------------------
+
+
+def http_get(url, timeout=60):
+    req = urllib.request.Request(url, headers={"User-Agent": f"gnosh/{VERSION}"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return r.read()
+
+
+def ego_info(uuid):
+    return json.loads(http_get(f"{EGO}/extension-info/?uuid={urllib.parse.quote(uuid)}"))
+
+
+def pick_build(shell_version_map):
+    emulated = int(emulated_shell_version().split(".")[0])
+    majors = {}
+    for key, build in (shell_version_map or {}).items():
+        try:
+            major = int(str(key).split(".")[0])
+        except ValueError:
+            continue
+        if MIN_SHELL <= major <= MAX_SHELL:
+            majors[major] = (key, build)
+    if not majors:
+        return None
+    if emulated in majors:
+        best = emulated
+    else:
+        lower = sorted((m for m in majors if m < emulated), reverse=True)
+        best = lower[0] if lower else min(majors)
+    key, build = majors[best]
+    return {"shell": key, **build}
+
+
+def safe_extract(zf, dest):
+    dest = Path(dest).resolve()
+    for member in zf.infolist():
+        target = (dest / member.filename).resolve()
+        if dest not in target.parents and target != dest:
+            die(f"refusing unsafe path in archive: {member.filename}")
+    zf.extractall(dest)
+
+
+def install_zip_bytes(data, expect_uuid=None):
+    with zipfile.ZipFile(io.BytesIO(data)) as zf:
+        try:
+            meta = json.loads(zf.read("metadata.json"))
+        except KeyError:
+            die("archive has no metadata.json; is it a GNOME Shell extension?")
+        uuid = meta.get("uuid")
+        if not uuid or "/" in uuid or uuid.startswith("."):
+            die("archive has an invalid uuid")
+        if expect_uuid and uuid != expect_uuid:
+            die(f"archive is for {uuid}, not {expect_uuid}")
+        target = EXT_DIR / uuid
+        tmp = Path(tempfile.mkdtemp(prefix=f".{uuid}.", dir=str(EXT_DIR)))
+        try:
+            safe_extract(zf, tmp)
+            if target.exists():
+                shutil.rmtree(target)
+            tmp.rename(target)
+        finally:
+            if tmp.exists():
+                shutil.rmtree(tmp, ignore_errors=True)
+    compile_schemas(target)
+    return uuid, meta
+
+
+def compat_data():
+    for path in [RUNTIME_DIR / "data" / "compat.json",
+                 Path(__file__).resolve().parent.parent / "runtime" / "data" / "compat.json"]:
+        try:
+            return json.loads(path.read_text())
+        except (OSError, ValueError):
+            continue
+    return {"incompatible": {}}
+
+
+def resolve_uuid(term):
+    """Accept a uuid, an extensions.gnome.org URL or a search term."""
+    m = re.search(r"extensions\.gnome\.org/extension/(\d+)", term)
+    if m:
+        data = json.loads(http_get(f"{EGO}/extension-info/?pk={m.group(1)}"))
+        return data["uuid"]
+    if "@" in term:
+        return term
+    results = ego_search(term)
+    if not results:
+        die(f"no extension matches '{term}'")
+    if len(results) > 1 and results[0]["name"].lower() != term.lower():
+        info("Several extensions match; installing the first. Use the uuid to pick another:")
+        for r in results[:5]:
+            info(f"  {r['uuid']:50} {r['name']}")
+    return results[0]["uuid"]
+
+
+def ego_search(term):
+    q = urllib.parse.urlencode({"search": term, "shell_version": emulated_shell_version().split(".")[0],
+                                "sort": "popularity"})
+    data = json.loads(http_get(f"{EGO}/extension-query/?{q}"))
+    return data.get("extensions", [])
+
+
+# --- commands -------------------------------------------------------------------
+
+STATE_COLORS = {"ACTIVE": "32", "INACTIVE": "2", "INITIALIZED": "2", "ERROR": "31", "OUT_OF_DATE": "33"}
+
+
+def cmd_status(args):
+    require_phosh()
+    st = runtime_status()
+    if not st:
+        info(c("gnosh is not running in Phosh.", "33"))
+        info("Run 'gnosh doctor' to find out why.")
+        return 1
+    active = [e for e in st["extensions"] if e["state"] == "ACTIVE"]
+    errors = [e for e in st["extensions"] if e["enabled"] and e["state"] in ("ERROR", "OUT_OF_DATE")]
+    info(f"gnosh {st['gnosh']} running in Phosh (GNOME Shell {st['shellVersion']} API), up {st['uptime']} s")
+    info(f"{len(active)} active extension(s), {len(errors)} with problems, {len(st['tiles'])} quick settings tile(s)")
+    for e in errors:
+        info(f"  {c(e['state'], STATE_COLORS.get(e['state'], '0'))} {e['uuid']}: {e['error']}")
+    return 0
+
+
+def cmd_list(args):
+    require_phosh()
+    st = runtime_status()
+    enabled = set(gsettings_strv("enabled-extensions"))
+    phosh_disabled = set(read_config().get("phoshDisabled", []))
+    rows = []
+    if st:
+        for e in st["extensions"]:
+            rows.append(e)
+    else:
+        for e in installed_extensions().values():
+            e["enabled"] = e["uuid"] in enabled
+            e["state"] = "NOT RUNNING"
+            e["error"] = None
+            rows.append(e)
+    if args.enabled:
+        rows = [r for r in rows if r["enabled"]]
+    if args.json:
+        print(json.dumps(rows, indent=2))
+        return 0
+    if not rows:
+        info("No extensions installed. Try: gnosh search clipboard")
+        return 0
+    for r in sorted(rows, key=lambda r: (not r["enabled"], r["uuid"])):
+        mark = c("●", "32") if r["enabled"] else c("○", "2")
+        state = r["state"]
+        extra = " (disabled in Phosh)" if r["uuid"] in phosh_disabled else ""
+        info(f"{mark} {r['uuid']:55} {c(state, STATE_COLORS.get(state, '0'))}{extra}")
+        if args.verbose and r.get("error"):
+            info(f"    {r['error']}")
+    return 0
+
+
+def cmd_search(args):
+    term = " ".join(args.term)
+    results = ego_search(term)
+    incompatible = compat_data().get("incompatible", {})
+    for r in results[: args.limit]:
+        note = c(" [not supported in Phosh]", "31") if r["uuid"] in incompatible else ""
+        info(f"{c(r['name'], '1')}{note}\n  {r['uuid']}\n  {r.get('description', '').splitlines()[0][:100] if r.get('description') else ''}")
+    if not results:
+        info("No results.")
+    return 0
+
+
+def cmd_install(args):
+    require_phosh()
+    EXT_DIR.mkdir(parents=True, exist_ok=True)
+    incompatible = compat_data().get("incompatible", {})
+    for term in args.extensions:
+        if os.path.isfile(term) and term.endswith(".zip"):
+            uuid, meta = install_zip_bytes(Path(term).read_bytes())
+        else:
+            uuid = resolve_uuid(term)
+            if uuid in incompatible and not read_config().get("allowUnsupported"):
+                warn(f"{uuid} is not supported in Phosh: {incompatible[uuid]}")
+                if not args.force:
+                    info("  (use --force to install anyway)")
+                    continue
+            data = ego_info(uuid)
+            build = pick_build(data.get("shell_version_map"))
+            if not build:
+                die(f"{uuid} has no build for GNOME Shell {MIN_SHELL}-{MAX_SHELL}")
+            info(f"Downloading {data.get('name', uuid)} (version {build.get('version')}, GNOME Shell {build['shell']})")
+            zipdata = http_get(f"{EGO}/download-extension/{urllib.parse.quote(uuid)}.shell-extension.zip"
+                               f"?version_tag={build['pk']}")
+            uuid, meta = install_zip_bytes(zipdata, expect_uuid=uuid)
+        info(f"Installed {meta.get('name', uuid)} ({uuid})")
+        if not args.no_enable:
+            enable(uuid)
+        if runtime_status():
+            if runtime_load(uuid):
+                info("  loaded into the running gnosh")
+            else:
+                info("  log out and back in to load it")
+    return 0
+
+
+def enable(uuid, phosh_only=False):
+    cfg = read_config()
+    pd = [u for u in cfg.get("phoshDisabled", []) if u != uuid]
+    if pd != cfg.get("phoshDisabled", []):
+        cfg["phoshDisabled"] = pd
+        write_config(cfg)
+    if phosh_only:
+        return
+    enabled = gsettings_strv("enabled-extensions")
+    disabled = [u for u in gsettings_strv("disabled-extensions") if u != uuid]
+    if uuid not in enabled:
+        gsettings_set_strv("enabled-extensions", enabled + [uuid])
+    gsettings_set_strv("disabled-extensions", disabled)
+
+
+def cmd_enable(args):
+    require_phosh()
+    known = installed_extensions()
+    for uuid in args.uuids:
+        if uuid not in known:
+            die(f"{uuid} is not installed (gnosh install {uuid})")
+        enable(uuid, args.phosh_only)
+        info(f"Enabled {uuid}")
+    return 0
+
+
+def cmd_disable(args):
+    require_phosh()
+    for uuid in args.uuids:
+        if args.phosh_only:
+            cfg = read_config()
+            pd = set(cfg.get("phoshDisabled", []))
+            pd.add(uuid)
+            cfg["phoshDisabled"] = sorted(pd)
+            write_config(cfg)
+            info(f"Disabled {uuid} in Phosh only (still enabled in GNOME)")
+            continue
+        gsettings_set_strv("enabled-extensions", [u for u in gsettings_strv("enabled-extensions") if u != uuid])
+        info(f"Disabled {uuid}")
+    return 0
+
+
+def cmd_uninstall(args):
+    require_phosh()
+    for uuid in args.uuids:
+        target = EXT_DIR / uuid
+        if not target.is_dir():
+            die(f"{uuid} is not installed for this user (system extensions cannot be removed)")
+        out, err = gdbus_call(EXT_BUS, EXT_PATH, f"{EXT_BUS}.UninstallExtension", gvariant_str(uuid))
+        if target.exists():
+            shutil.rmtree(target)
+        gsettings_set_strv("enabled-extensions", [u for u in gsettings_strv("enabled-extensions") if u != uuid])
+        info(f"Uninstalled {uuid}")
+    return 0
+
+
+def cmd_prefs(args):
+    require_phosh()
+    out, err = gdbus_call(EXT_BUS, EXT_PATH, f"{EXT_BUS}.OpenExtensionPrefs", gvariant_str(args.uuid), "''", "{}")
+    if out is None:
+        # gnosh not running: start the prefs host directly
+        host = RUNTIME_DIR / "prefs" / "main.js"
+        if not host.exists():
+            die(f"cannot open preferences: {err}")
+        subprocess.Popen(["gjs", "-m", str(host), args.uuid])
+    return 0
+
+
+def cmd_info(args):
+    exts = installed_extensions()
+    e = exts.get(args.uuid)
+    st = runtime_status() if in_phosh_session() else None
+    live = next((x for x in (st or {}).get("extensions", []) if x["uuid"] == args.uuid), None)
+    if not e and not live:
+        try:
+            data = ego_info(args.uuid)
+        except urllib.error.HTTPError:
+            die(f"{args.uuid} is not installed and not on extensions.gnome.org")
+        build = pick_build(data.get("shell_version_map"))
+        info(f"{data['name']} ({data['uuid']}) - not installed")
+        info(f"  {data.get('link', '')}")
+        info(f"  build for gnosh: {build['version'] if build else 'none (no GNOME 45-51 build)'}")
+        return 0
+    e = {**(e or {}), **(live or {})}
+    for k in ["name", "uuid", "version", "type", "path", "state", "enabled", "error", "shellVersion", "hasPrefs"]:
+        if k in e and e[k] not in (None, ""):
+            info(f"{k:13} {e[k]}")
+    reason = compat_data().get("incompatible", {}).get(args.uuid)
+    if reason:
+        info(f"{'phosh':13} not supported: {reason}")
+    return 0
+
+
+def cmd_update(args):
+    require_phosh()
+    exts = {u: e for u, e in installed_extensions().items() if e["type"] == "user"}
+    if args.uuids:
+        exts = {u: e for u, e in exts.items() if u in args.uuids}
+    updated = []
+    for uuid, e in sorted(exts.items()):
+        try:
+            data = ego_info(uuid)
+        except urllib.error.HTTPError:
+            continue
+        except urllib.error.URLError as err:
+            die(f"cannot reach extensions.gnome.org: {err.reason}")
+        build = pick_build(data.get("shell_version_map"))
+        if not build:
+            continue
+        current = e.get("version") or 0
+        if int(build.get("version", 0)) > int(current or 0):
+            info(f"{uuid}: {current} -> {build['version']}")
+            if args.check:
+                continue
+            zipdata = http_get(f"{EGO}/download-extension/{urllib.parse.quote(uuid)}.shell-extension.zip"
+                               f"?version_tag={build['pk']}")
+            install_zip_bytes(zipdata, expect_uuid=uuid)
+            updated.append(uuid)
+    if not updated:
+        info("All extensions are up to date." if not args.check else "Check done.")
+    else:
+        info(f"Updated {len(updated)} extension(s). Log out and back in to run the new versions "
+             "(GNOME Shell extensions cannot be reloaded in a running shell).")
+    return 0
+
+
+# --- shell activation (systemd drop-in) -----------------------------------------
+
+
+def phosh_unit():
+    for unit in PHOSH_UNITS:
+        for d in ["/usr/lib/systemd/user", "/lib/systemd/user", "/etc/systemd/user", "/usr/local/lib/systemd/user"]:
+            if Path(d, unit).exists():
+                return unit
+    return None
+
+
+def dropin_path(unit):
+    return SYSTEMD_USER / f"{unit}.d" / DROPIN_NAME
+
+
+DESKTOP_OVERRIDE = XDG_DATA / "applications" / "mobi.phosh.Shell.desktop"
+
+
+def shell_enable():
+    if not MODULE_PATH.exists():
+        die(f"{MODULE_PATH} is missing; reinstall gnosh (setup.sh)")
+    unit = phosh_unit()
+    if unit:
+        path = dropin_path(unit)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            "# Written by gnosh: load the gnosh runtime into Phosh.\n"
+            "# Remove with: gnosh shell disable\n"
+            "[Service]\n"
+            f"Environment=GTK_MODULES={MODULE_PATH}\n")
+        run(["systemctl", "--user", "daemon-reload"])
+        return f"systemd drop-in {path}"
+    # gnome-session without systemd (OpenRC): override the component's desktop file
+    for d in ["/usr/share/applications", "/usr/local/share/applications"]:
+        src = Path(d) / "mobi.phosh.Shell.desktop"
+        if src.exists():
+            text = src.read_text()
+            text = re.sub(r"^Exec=(.*)$", lambda m: f"Exec=env GTK_MODULES={MODULE_PATH} {m.group(1)}", text, flags=re.M)
+            DESKTOP_OVERRIDE.parent.mkdir(parents=True, exist_ok=True)
+            DESKTOP_OVERRIDE.write_text("# Written by gnosh (remove with: gnosh shell disable)\n" + text)
+            return f"desktop override {DESKTOP_OVERRIDE}"
+    die("could not find how Phosh is started (no mobi.phosh.Shell.service, sm.puri.Phosh.service "
+        "or mobi.phosh.Shell.desktop)")
+
+
+def shell_disable():
+    removed = []
+    for unit in PHOSH_UNITS:
+        p = dropin_path(unit)
+        if p.exists():
+            p.unlink()
+            removed.append(str(p))
+            try:
+                p.parent.rmdir()
+            except OSError:
+                pass
+    if DESKTOP_OVERRIDE.exists() and "gnosh" in DESKTOP_OVERRIDE.read_text():
+        DESKTOP_OVERRIDE.unlink()
+        removed.append(str(DESKTOP_OVERRIDE))
+    if removed:
+        run(["systemctl", "--user", "daemon-reload"])
+    return removed
+
+
+def shell_state():
+    unit = phosh_unit()
+    configured = bool(unit and dropin_path(unit).exists()) or (
+        DESKTOP_OVERRIDE.exists() and "gnosh" in DESKTOP_OVERRIDE.read_text())
+    pid = phosh_running()
+    loaded = False
+    if pid:
+        try:
+            env = Path(f"/proc/{pid}/environ").read_bytes().split(b"\0")
+            loaded = any(e.startswith(b"GTK_MODULES=") and b"gnosh" in e for e in env)
+        except OSError:
+            pass
+    safe_mode = (XDG_RUNTIME / "gnosh" / "safe-mode").exists()
+    disabled = (XDG_CONFIG / "gnosh" / "disabled").exists()
+    return {"unit": unit, "configured": configured, "phosh_pid": pid, "module_in_phosh": loaded,
+            "safe_mode": safe_mode, "disabled_flag": disabled}
+
+
+def cmd_shell(args):
+    if args.action == "enable":
+        where = shell_enable()
+        flag = XDG_CONFIG / "gnosh" / "disabled"
+        if flag.exists():
+            flag.unlink()
+        info(f"gnosh will load into Phosh ({where}).")
+        info("Log out and back in (or reboot) to start it.")
+    elif args.action == "disable":
+        removed = shell_disable()
+        info("gnosh will not load into Phosh at the next login." if removed else "gnosh was not enabled.")
+    elif args.action == "pause":
+        flag = XDG_CONFIG / "gnosh" / "disabled"
+        flag.parent.mkdir(parents=True, exist_ok=True)
+        flag.write_text("disabled by 'gnosh shell pause'\n")
+        info("gnosh stays inactive at the next Phosh start (gnosh shell enable to undo).")
+    elif args.action == "reset":
+        for name in ["unstable-starts", "safe-mode"]:
+            p = XDG_RUNTIME / "gnosh" / name
+            if p.exists():
+                p.unlink()
+        info("Crash guard reset; gnosh will try to start with the next Phosh start.")
+    else:
+        st = shell_state()
+        for k, v in st.items():
+            info(f"{k:16} {v}")
+    return 0
+
+
+# --- doctor ----------------------------------------------------------------------
+
+
+def cmd_doctor(args):
+    ok = True
+
+    def check(cond, good, bad, fatal=True):
+        nonlocal ok
+        if cond:
+            info(f"{c('✓', '32')} {good}")
+        else:
+            info(f"{c('✗' if fatal else '!', '31' if fatal else '33')} {bad}")
+            if fatal:
+                ok = False
+
+    info(f"gnosh {VERSION} on {platform.machine()}")
+    osr = {}
+    try:
+        for line in Path("/etc/os-release").read_text().splitlines():
+            if "=" in line:
+                k, v = line.split("=", 1)
+                osr[k] = v.strip('"')
+    except OSError:
+        pass
+    info(f"system: {osr.get('PRETTY_NAME', 'unknown')}")
+    desktop = os.environ.get("XDG_CURRENT_DESKTOP", "")
+    check(in_phosh_session(), f"Phosh session (XDG_CURRENT_DESKTOP={desktop or 'unset'})",
+          f"not a Phosh session (XDG_CURRENT_DESKTOP={desktop or 'unset'}); gnosh only works in Phosh")
+    phosh_bin = next((p for p in ["/usr/libexec/phosh", "/usr/bin/phosh", "/usr/lib/phosh/phosh"] if Path(p).exists()), None)
+    check(phosh_bin, f"phosh installed: {phosh_bin}", "phosh is not installed")
+    if phosh_bin:
+        v = run([phosh_bin, "--version"]).stdout.strip()
+        if v:
+            info(f"  {v}")
+    gjs = shutil.which("gjs")
+    check(gjs, f"gjs: {run(['gjs', '--version']).stdout.strip() if gjs else ''}", "gjs is missing (install gjs)")
+    check(RUNTIME_DIR.joinpath("shell", "main.js").exists(), f"runtime installed in {RUNTIME_DIR}",
+          f"runtime missing in {RUNTIME_DIR} (run setup.sh)")
+    check(MODULE_PATH.exists(), f"Phosh module installed: {MODULE_PATH}", f"module missing: {MODULE_PATH}")
+    st = shell_state()
+    check(st["configured"], f"enabled for Phosh ({st['unit'] or 'desktop override'})",
+          "not enabled for Phosh (run: gnosh shell enable)")
+    if st["phosh_pid"]:
+        check(st["module_in_phosh"], f"running Phosh (pid {st['phosh_pid']}) has the gnosh module",
+              "the running Phosh was started without gnosh; log out and back in", fatal=False)
+    check(not st["safe_mode"], "crash guard clear",
+          "gnosh was skipped because Phosh crashed twice at start (gnosh shell reset, then log in again)")
+    check(not st["disabled_flag"], "not paused", "paused by 'gnosh shell pause' (gnosh shell enable)", fatal=False)
+    rs = runtime_status() if in_phosh_session() else None
+    check(rs, f"runtime answering on D-Bus ({len(rs['extensions']) if rs else 0} extensions known)",
+          "runtime is not answering on D-Bus", fatal=bool(st["module_in_phosh"]))
+    check(shutil.which("glib-compile-schemas"), "glib-compile-schemas available",
+          "glib-compile-schemas missing: extensions with settings will fail (install glib / libglib2.0-bin)",
+          fatal=False)
+    em = (run(["flatpak", "info", "com.mattjakeman.ExtensionManager"]).returncode == 0) or bool(shutil.which("extension-manager"))
+    check(em, "Extension Manager installed", "Extension Manager not installed (setup.sh installs it)", fatal=False)
+    check(shutil.which("gext") or (PREFIX / "bin" / "gext").exists(), "gnome-extensions-cli (gext) installed",
+          "gext not installed (setup.sh installs it)", fatal=False)
+    timer = SYSTEMD_USER / "gnosh-update.timer"
+    info(f"{c('•', '36')} automatic updates: {'on' if timer.exists() else 'off'}")
+    info("" if ok else "Some checks failed.")
+    return 0 if ok else 1
+
+
+# --- self-update -------------------------------------------------------------------
+
+
+def latest_release():
+    data = json.loads(http_get(f"https://api.github.com/repos/{REPO}/releases/latest"))
+    return data
+
+
+def version_tuple(v):
+    return tuple(int(x) for x in re.findall(r"\d+", v)[:3]) or (0,)
+
+
+def cmd_self_update(args):
+    try:
+        rel = latest_release()
+    except urllib.error.URLError as err:
+        die(f"cannot reach GitHub: {err}")
+    latest = rel["tag_name"].lstrip("v")
+    current = VERSION
+    if VERSION != "dev" and version_tuple(latest) <= version_tuple(current) and not args.force:
+        if not args.quiet:
+            info(f"gnosh {current} is up to date.")
+        return 0
+    if args.check:
+        info(f"gnosh {latest} is available (installed: {current}).")
+        return 0
+    assets = {a["name"]: a["browser_download_url"] for a in rel.get("assets", [])}
+    tar_name = f"gnosh-{latest}.tar.gz"
+    if tar_name not in assets:
+        die(f"release {latest} has no {tar_name}")
+    data = http_get(assets[tar_name], timeout=300)
+    sums = assets.get(f"{tar_name}.sha256")
+    if sums:
+        expected = http_get(sums).decode().split()[0]
+        actual = hashlib.sha256(data).hexdigest()
+        if expected != actual:
+            die(f"checksum mismatch for {tar_name}")
+    with tempfile.TemporaryDirectory() as tmp:
+        with tarfile.open(fileobj=io.BytesIO(data)) as tf:
+            for m in tf.getmembers():
+                if m.name.startswith("/") or ".." in Path(m.name).parts:
+                    die(f"unsafe path in release archive: {m.name}")
+            tf.extractall(tmp)
+        roots = [p for p in Path(tmp).iterdir() if p.is_dir()]
+        src = roots[0] if len(roots) == 1 else Path(tmp)
+        res = subprocess.run(["sh", str(src / "setup.sh"), "--from-dir", str(src), "--update-only"])
+        if res.returncode != 0:
+            die("installing the update failed")
+    info(f"Updated gnosh {current} -> {latest}. The new runtime starts with the next Phosh start.")
+    return 0
+
+
+def cmd_config(args):
+    cfg = read_config()
+    keys = {
+        "shell-version": ("shellVersion", str, "GNOME Shell API version reported to extensions (default 50.0)"),
+        "allow-unsupported": ("allowUnsupported", lambda v: v.lower() in ("1", "true", "yes", "on"),
+                              "load extensions known not to work in Phosh (default false)"),
+        "auto-update": (None, None, "daily self-update and extension update check (systemd timer)"),
+    }
+    if not args.key:
+        for k, (field, _, desc) in keys.items():
+            if field:
+                info(f"{k:18} {cfg.get(field, '(default)')}  # {desc}")
+        info(f"{'auto-update':18} {'true' if (SYSTEMD_USER / 'gnosh-update.timer').exists() else 'false'}")
+        info(f"{'phosh-disabled':18} {', '.join(cfg.get('phoshDisabled', [])) or '(none)'}")
+        return 0
+    if args.key not in keys:
+        die(f"unknown key {args.key}; known: {', '.join(keys)}")
+    field, conv, _ = keys[args.key]
+    if args.key == "auto-update":
+        if args.value is None:
+            info("true" if (SYSTEMD_USER / "gnosh-update.timer").exists() else "false")
+            return 0
+        set_auto_update(args.value.lower() in ("1", "true", "yes", "on"))
+        return 0
+    if args.value is None:
+        info(str(cfg.get(field, "(default)")))
+        return 0
+    cfg[field] = conv(args.value)
+    write_config(cfg)
+    info(f"{args.key} = {cfg[field]} (applies at the next Phosh start)")
+    return 0
+
+
+def set_auto_update(on):
+    svc = SYSTEMD_USER / "gnosh-update.service"
+    timer = SYSTEMD_USER / "gnosh-update.timer"
+    if on:
+        SYSTEMD_USER.mkdir(parents=True, exist_ok=True)
+        svc.write_text("[Unit]\nDescription=Update gnosh and GNOME Shell extensions\n"
+                       "After=network-online.target\n\n[Service]\nType=oneshot\n"
+                       f"Environment=GNOSH_FORCE=1\nExecStart={BIN_PATH} self-update --quiet\n"
+                       f"ExecStart=-{BIN_PATH} update\n")
+        timer.write_text("[Unit]\nDescription=Daily gnosh update check\n\n[Timer]\nOnCalendar=daily\n"
+                         "RandomizedDelaySec=2h\nPersistent=true\n\n[Install]\nWantedBy=timers.target\n")
+        run(["systemctl", "--user", "daemon-reload"])
+        run(["systemctl", "--user", "enable", "--now", "gnosh-update.timer"])
+        info("Automatic updates enabled (daily).")
+    else:
+        run(["systemctl", "--user", "disable", "--now", "gnosh-update.timer"])
+        for p in (svc, timer):
+            if p.exists():
+                p.unlink()
+        run(["systemctl", "--user", "daemon-reload"])
+        info("Automatic updates disabled.")
+
+
+def cmd_log(args):
+    unit = phosh_unit() or "mobi.phosh.Shell.service"
+    res = run(["journalctl", "--user", "-b", "-u", unit, "--no-pager", "-o", "cat"], timeout=30)
+    lines = [l for l in res.stdout.splitlines() if re.search(r"gnosh|Gjs|JS ERROR|Extension ", l)]
+    print("\n".join(lines[-args.lines:]) if lines else "No gnosh messages in this boot's Phosh log.")
+    return 0
+
+
+def cmd_version(args):
+    print(f"gnosh {VERSION}")
+    return 0
+
+
+def main(argv=None):
+    p = argparse.ArgumentParser(prog="gnosh", description="Run GNOME Shell extensions in Phosh.")
+    p.add_argument("--version", action="store_true", help="print the version")
+    sub = p.add_subparsers(dest="cmd")
+
+    sub.add_parser("status", help="show whether gnosh runs and extension problems").set_defaults(func=cmd_status)
+    sp = sub.add_parser("list", help="list installed extensions")
+    sp.add_argument("--enabled", action="store_true")
+    sp.add_argument("--json", action="store_true")
+    sp.add_argument("-v", "--verbose", action="store_true", help="show errors")
+    sp.set_defaults(func=cmd_list)
+    sp = sub.add_parser("search", help="search extensions.gnome.org")
+    sp.add_argument("term", nargs="+")
+    sp.add_argument("-n", "--limit", type=int, default=10)
+    sp.set_defaults(func=cmd_search)
+    sp = sub.add_parser("install", help="install extensions (uuid, URL, search term or .zip)")
+    sp.add_argument("extensions", nargs="+")
+    sp.add_argument("--no-enable", action="store_true")
+    sp.add_argument("--force", action="store_true", help="install even if known not to work in Phosh")
+    sp.set_defaults(func=cmd_install)
+    for name, func, hlp in [("enable", cmd_enable, "enable extensions"), ("disable", cmd_disable, "disable extensions")]:
+        sp = sub.add_parser(name, help=hlp)
+        sp.add_argument("uuids", nargs="+")
+        sp.add_argument("--phosh-only", action="store_true",
+                        help="only in Phosh (GNOME's setting is left alone)")
+        sp.set_defaults(func=func)
+    sp = sub.add_parser("uninstall", help="remove user-installed extensions")
+    sp.add_argument("uuids", nargs="+")
+    sp.set_defaults(func=cmd_uninstall)
+    sp = sub.add_parser("prefs", help="open an extension's preferences")
+    sp.add_argument("uuid")
+    sp.set_defaults(func=cmd_prefs)
+    sp = sub.add_parser("info", help="details about an extension")
+    sp.add_argument("uuid")
+    sp.set_defaults(func=cmd_info)
+    sp = sub.add_parser("update", help="update extensions from extensions.gnome.org")
+    sp.add_argument("uuids", nargs="*")
+    sp.add_argument("--check", action="store_true", help="only report available updates")
+    sp.set_defaults(func=cmd_update)
+    sub.add_parser("doctor", help="check the installation").set_defaults(func=cmd_doctor)
+    sp = sub.add_parser("self-update", help="update gnosh from GitHub releases")
+    sp.add_argument("--check", action="store_true")
+    sp.add_argument("--force", action="store_true")
+    sp.add_argument("--quiet", action="store_true")
+    sp.set_defaults(func=cmd_self_update)
+    sp = sub.add_parser("shell", help="enable/disable gnosh inside Phosh")
+    sp.add_argument("action", nargs="?", default="status", choices=["status", "enable", "disable", "pause", "reset"])
+    sp.set_defaults(func=cmd_shell)
+    sp = sub.add_parser("config", help="show or change settings")
+    sp.add_argument("key", nargs="?")
+    sp.add_argument("value", nargs="?")
+    sp.set_defaults(func=cmd_config)
+    sp = sub.add_parser("log", help="show gnosh messages from Phosh's log")
+    sp.add_argument("-n", "--lines", type=int, default=60)
+    sp.set_defaults(func=cmd_log)
+    sub.add_parser("version", help="print the version").set_defaults(func=cmd_version)
+
+    args = p.parse_args(argv)
+    if args.version:
+        return cmd_version(args)
+    if not args.cmd:
+        p.print_help()
+        return 0
+    try:
+        return args.func(args) or 0
+    except KeyboardInterrupt:
+        return 130
+    except urllib.error.URLError as err:
+        die(f"network error: {getattr(err, 'reason', err)}")
+
+
+if __name__ == "__main__":
+    sys.exit(main())

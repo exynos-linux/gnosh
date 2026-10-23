@@ -41,6 +41,7 @@ const GNOSH_IFACE = `
     <method name="ShowExtension"><arg type="s" name="uuid" direction="in"/><arg type="b" name="shown" direction="out"/></method>
     <method name="Unfold"/>
     <method name="Fold"/>
+    <method name="LoadExtension"><arg type="s" name="uuid" direction="in"/><arg type="b" name="loaded" direction="out"/></method>
     <method name="Eval"><arg type="s" name="code" direction="in"/><arg type="b" name="success" direction="out"/><arg type="s" name="result" direction="out"/></method>
     <property name="Version" type="s" access="read"/>
   </interface>
@@ -192,6 +193,15 @@ class GnoshService {
 
     ShowExtension(uuid) {
         return this._ctx.bridge.showExtension(uuid);
+    }
+
+    LoadExtensionAsync([uuid], invocation) {
+        this._ctx.loadUserExtension(uuid)
+            .then(ok => invocation.return_value(new GLib.Variant('(b)', [ok])))
+            .catch(e => {
+                logError(e);
+                invocation.return_value(new GLib.Variant('(b)', [false]));
+            });
     }
 
     Unfold() {
