@@ -32,6 +32,10 @@ jobs:
             tag="${INPUT_TAG}"
           elif [[ "${GITHUB_REF}" == refs/tags/* ]]; then
             tag="${GITHUB_REF_NAME}"
+          elif [[ "${GITHUB_REF}" == refs/heads/main ]] && ! git rev-parse -q --verify "refs/tags/v$(cat VERSION)" >/dev/null; then
+            # First main push of a new VERSION: publish it as the stable
+            # release, which setup.sh and self-update fetch via releases/latest.
+            tag="v$(cat VERSION)"
           elif [[ "${GITHUB_REF}" == refs/heads/main ]]; then
             tag="v$(cat VERSION)-main-$(git rev-parse --short HEAD)"
           else
@@ -91,7 +95,9 @@ jobs:
 
           extra_args=()
           if [[ "${PRERELEASE}" == "true" ]]; then
-            extra_args+=(--prerelease)
+            extra_args+=(--prerelease --latest=false)
+          else
+            extra_args+=(--latest)
           fi
 
           gh release create "${TAG}" \
