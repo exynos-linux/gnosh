@@ -80,10 +80,12 @@ TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT INT TERM
 
 fetch() { # URL FILE
+    # The shell writes the file, not the downloader: a sandboxed curl (e.g. a
+    # coldbrew wrapper with its own /tmp) cannot see our $TMP
     if have curl; then
-        curl -fsSL --retry 3 -o "$2" "$1"
+        curl -fsSL --retry 3 "$1" > "$2"
     elif have wget; then
-        wget -q -O "$2" "$1"
+        wget -q -O - "$1" > "$2"
     else
         die "curl or wget is needed to download gnosh"
     fi
