@@ -1,0 +1,75 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * gnosh base theme: the GNOME Shell style classes extension widgets use,
+ * styled to sit inside Phosh's top bar and quick settings. Written in St
+ * syntax; gnosh translates GTK-compatible declarations to GTK CSS and
+ * applies St-only ones (icon-size, spacing, -barlevel-*) itself.
+ * Every gnosh widget carries the .gnosh class, so Phosh's own widgets
+ * are never affected.
+ */
+
+/* top bar */
+.gnosh.gnosh-panel { padding: 0; }
+.gnosh.gnosh-panel-box { spacing: 2px; }
+.gnosh.panel-button { padding: 0 3px; }
+.gnosh.panel-button .gnosh.system-status-icon { icon-size: 16px; }
+.gnosh.panel-status-indicators-box { spacing: 4px; }
+.gnosh.system-status-icon { icon-size: 16px; padding: 0 1px; }
+
+/* popup menus shown in Phosh status pages */
+.gnosh.popup-menu-content,
+.gnosh.popup-menu-box { padding: 2px 0; spacing: 0; }
+.gnosh.popup-menu-item {
+    padding: 8px 10px;
+    border-radius: 9px;
+    min-height: 26px;
+    spacing: 8px;
+}
+.gnosh.popup-menu-item:hover,
+.gnosh.popup-menu-item:selected { background-color: alpha(currentColor, 0.08); }
+.gnosh.popup-menu-item:active,
+.gnosh.popup-menu-item:checked { background-color: alpha(currentColor, 0.16); }
+.gnosh.popup-inactive-menu-item { color: alpha(currentColor, 0.55); }
+.gnosh.popup-menu-ornament { icon-size: 16px; min-width: 16px; }
+.gnosh.popup-menu-icon { icon-size: 16px; }
+.gnosh.popup-menu-arrow { icon-size: 16px; }
+.gnosh.popup-separator-menu-item { padding: 4px 10px; min-height: 1px; }
+.gnosh.popup-separator-menu-item-separator { min-height: 1px; background-color: alpha(currentColor, 0.15); }
+.gnosh.popup-sub-menu { background-color: alpha(currentColor, 0.04); border-radius: 9px; margin: 0 4px; }
+.gnosh.popup-menu-section { spacing: 0; }
+
+/* switches, sliders, check boxes (St-only sizes are read by the widgets) */
+.gnosh.toggle-switch { min-width: 40px; min-height: 22px; }
+.gnosh.slider {
+    -barlevel-height: 4px;
+    -barlevel-border-width: 0;
+    -barlevel-background-color: rgba(127, 127, 127, 0.35);
+    -barlevel-active-background-color: #3584e4;
+    -barlevel-overdrive-color: #e01b24;
+    -barlevel-overdrive-separator-width: 1px;
+    -slider-handle-radius: 9px;
+    -slider-handle-border-width: 0;
+    color: #ffffff;
+    min-height: 24px;
+    height: 24px;
+}
+.gnosh.level { -barlevel-height: 4px; -barlevel-background-color: rgba(127, 127, 127, 0.35); -barlevel-active-background-color: #3584e4; height: 8px; }
+.gnosh.check-box { spacing: 8px; }
+
+/* quick settings items rendered in status pages */
+.gnosh.quick-toggle-menu { padding: 2px 0; }
+.gnosh.quick-toggle-menu .gnosh.header { padding: 4px 6px 10px 6px; spacing: 8px; }
+.gnosh.quick-toggle-menu .gnosh.header .gnosh.icon { icon-size: 24px; }
+.gnosh.quick-toggle-menu .gnosh.header .gnosh.title { font-weight: bold; }
+.gnosh.quick-toggle-icon { icon-size: 16px; }
+.gnosh.gnosh-slider-page { padding: 12px 6px; }
+
+/* entries and buttons inside menus */
+.gnosh.search-entry { margin: 4px 6px; }
+.gnosh.button { padding: 6px 12px; border-radius: 9px; }
+.gnosh.icon-button { padding: 6px; border-radius: 99px; }
+
+/* message dialogs (ui/dialog.js) shown in Phosh system modal dialogs */
+.gnosh.message-dialog-content { spacing: 12px; padding: 12px; }
+.gnosh.message-dialog-title { font-size: 16pt; font-weight: bold; }
+.gnosh.message-dialog-description { }

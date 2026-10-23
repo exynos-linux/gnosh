@@ -1,0 +1,7 @@
+/build/
+/dist/
+/site/_site/
+__pycache__/
+*.pyc
+/tests/out/
+/node_modules/

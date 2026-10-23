@@ -1,0 +1,18 @@
+# Test image: postmarketOS edge with Phosh, libphosh and GJS.
+# Used to run Phosh nested (or headless in CI) with gnosh-shell.
+FROM gitlab.postmarketos.org:5050/postmarketos/docker-postmarketos:edge
+ENTRYPOINT []
+RUN apk update && apk add --no-cache \
+      phosh libphosh phoc gjs gtk4.0 libadwaita gnome-shell-extensions \
+      networkmanager gnome-bluetooth \
+      dbus dbus-x11 dconf python3 py3-pip pipx git curl unzip shellcheck \
+      wl-clipboard grim adwaita-icon-theme font-cantarell font-dejavu \
+      mesa-dri-gallium bash sudo jq glib-dev \
+    && rm -rf /var/cache/apk/*
+# A clean, unprivileged test user (uid 1000 so --userns=keep-id maps it to the host user).
+RUN (getent passwd 1000 && deluser $(getent passwd 1000 | cut -d: -f1) || true) \
+    && adduser -D -u 1000 -s /bin/bash tester \
+    && echo 'tester ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/tester
+USER tester
+WORKDIR /home/tester
+CMD ["/bin/bash"]
