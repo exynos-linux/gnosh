@@ -334,11 +334,11 @@ def resolve_uuid(term):
     return results[0]["uuid"]
 
 
-def ego_search(term):
-    q = urllib.parse.urlencode({"search": term, "shell_version": emulated_shell_version().split(".")[0],
-                                "sort": "popularity"})
+def ego_search(term, limit=20):
+    # The shell_version filter skews ranking; filter by available builds here.
+    q = urllib.parse.urlencode({"search": term, "sort": "downloads", "n_per_page": max(limit * 2, 20)})
     data = json.loads(http_get(f"{EGO}/extension-query/?{q}"))
-    return data.get("extensions", [])
+    return [e for e in data.get("extensions", []) if pick_build(e.get("shell_version_map"))]
 
 
 # --- commands -------------------------------------------------------------------
@@ -397,7 +397,7 @@ def cmd_list(args):
 
 def cmd_search(args):
     term = " ".join(args.term)
-    results = ego_search(term)
+    results = ego_search(term, args.limit)
     incompatible = compat_data().get("incompatible", {})
     for r in results[: args.limit]:
         note = c(" [not supported in Phosh]", "31") if r["uuid"] in incompatible else ""

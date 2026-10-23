@@ -21,7 +21,7 @@ compiler=$(command -v gi-compile-repository || command -v g-ir-compiler)
         cat > "$tmp/$ns-$VERSION.gir" <<GIR
 <?xml version="1.0"?>
 <repository version="1.2" xmlns="http://www.gtk.org/introspection/core/1.0" xmlns:c="http://www.gtk.org/introspection/c/1.0">
-  <namespace name="$ns" version="$VERSION" c:identifier-prefixes="$ns" c:symbol-prefixes="$(echo "$ns" | tr 'A-Z' 'a-z')">
+  <namespace name="$ns" version="$VERSION" c:identifier-prefixes="$ns" c:symbol-prefixes="$(echo "$ns" | tr '[:upper:]' '[:lower:]')">
   </namespace>
 </repository>
 GIR
