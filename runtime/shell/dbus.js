@@ -7,7 +7,7 @@
 //    org.gnome.Shell.Extensions (object /org/gnome/Shell/Extensions) and,
 //    because gnosh runs inside Phosh, also at /org/gnome/Shell on Phosh's
 //    connection, which owns org.gnome.Shell.
-//  - io.github.dixonsolutions.Gnosh, gnosh's own status/control API used
+//  - io.github.exynos_linux.Gnosh, gnosh's own status/control API used
 //    by the `gnosh` command and the test suite.
 
 import Gio from 'gi://Gio';
@@ -36,7 +36,7 @@ const EXTENSIONS_IFACE = `
 
 const GNOSH_IFACE = `
 <node>
-  <interface name="io.github.dixonsolutions.Gnosh">
+  <interface name="io.github.exynos_linux.Gnosh">
     <method name="GetStatus"><arg type="s" name="json" direction="out"/></method>
     <method name="ShowExtension"><arg type="s" name="uuid" direction="in"/><arg type="b" name="shown" direction="out"/></method>
     <method name="Unfold"/>
@@ -238,9 +238,9 @@ export function exportServices(ctx) {
         () => console.warn('gnosh: could not own org.gnome.Shell.Extensions'));
 
     const gnosh = Gio.DBusExportedObject.wrapJSObject(GNOSH_IFACE, new GnoshService(ctx));
-    gnosh.export(connection, '/io/github/dixonsolutions/Gnosh');
-    Gio.bus_own_name_on_connection(connection, 'io.github.dixonsolutions.Gnosh', Gio.BusNameOwnerFlags.NONE, null,
-        () => console.warn('gnosh: could not own io.github.dixonsolutions.Gnosh'));
+    gnosh.export(connection, '/io/github/exynos_linux/Gnosh');
+    Gio.bus_own_name_on_connection(connection, 'io.github.exynos_linux.Gnosh', Gio.BusNameOwnerFlags.NONE, null,
+        () => console.warn('gnosh: could not own io.github.exynos_linux.Gnosh'));
 
     ctx.Main.extensionManager.connect('extension-state-changed', (m, extension) =>
         extensions.emitStateChanged(extension));

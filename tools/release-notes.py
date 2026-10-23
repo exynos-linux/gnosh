@@ -14,7 +14,7 @@ print(f"""
 ### Install
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/dixonSolutions/gnosh/main/setup.sh | sh
+curl -fsSL https://raw.githubusercontent.com/exynos-linux/gnosh/main/setup.sh | sh
 ```
 
 or `gnosh self-update` if gnosh is installed. `gnosh-{version}.tar.gz` contains

@@ -7,7 +7,7 @@
       dialogs and notifications are Phosh's own. Preferences, Extension Manager and <code>gext</code> work as on GNOME.</p>
     <a class="btn" href="#install">Install</a>
     <a class="btn secondary" href="compatibility.html">Tested extensions</a>
-    <a class="btn secondary" href="https://github.com/dixonSolutions/gnosh">Source</a>
+    <a class="btn secondary" href="https://github.com/exynos-linux/gnosh">Source</a>
     <p class="small">Version {{version}} · GPL-3.0-or-later · Phosh only: it does nothing in GNOME, KDE or other desktops.</p>
   </div>
   <div class="shots">
@@ -19,9 +19,9 @@
 <h2 id="install">Install</h2>
 <div class="install">
   <p>In a Phosh session (or over ssh as the Phosh user):</p>
-  <pre><code>curl -fsSL https://raw.githubusercontent.com/dixonSolutions/gnosh/main/setup.sh | sh</code></pre>
+  <pre><code>curl -fsSL https://raw.githubusercontent.com/exynos-linux/gnosh/main/setup.sh | sh</code></pre>
   <p>or from git:</p>
-  <pre><code>git clone https://github.com/dixonSolutions/gnosh
+  <pre><code>git clone https://github.com/exynos-linux/gnosh
 cd gnosh &amp;&amp; ./setup.sh</code></pre>
   <p>Then log out and back in. Everything goes into your home directory (<code>~/.local</code>, <code>~/.config</code>,
     <code>flatpak --user</code>), so it works on immutable systems without root. <code>setup.sh</code> also installs
@@ -70,5 +70,5 @@ gnosh doctor</code></pre>
  ├─ St / Clutter / Meta / Shell implemented on GTK 3
  └─ bridge → Phosh top bar · PhoshQuickSetting tiles · PhoshStatusPage
              PhoshSystemModalDialog · notifications · OSD · accelerators
-D-Bus: org.gnome.Shell.Extensions (Extension Manager, gext) · io.github.dixonsolutions.Gnosh (gnosh CLI)</pre></div>
+D-Bus: org.gnome.Shell.Extensions (Extension Manager, gext) · io.github.exynos_linux.Gnosh (gnosh CLI)</pre></div>
 <p>Read more in the <a href="docs.html">documentation</a>, including what does <em>not</em> work and why.</p>

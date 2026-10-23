@@ -3,7 +3,7 @@
 """gnosh: run GNOME Shell extensions in Phosh.
 
 The command-line manager. Talks to the gnosh runtime inside Phosh over
-D-Bus (io.github.dixonsolutions.Gnosh and org.gnome.Shell.Extensions),
+D-Bus (io.github.exynos_linux.Gnosh and org.gnome.Shell.Extensions),
 installs extensions from extensions.gnome.org, and keeps gnosh itself up
 to date from GitHub releases. Python 3 standard library only.
 """
@@ -28,10 +28,10 @@ import zipfile
 from pathlib import Path
 
 VERSION = "dev"  # replaced at install time
-REPO = "dixonSolutions/gnosh"
+REPO = "exynos-linux/gnosh"
 EGO = "https://extensions.gnome.org"
-GNOSH_BUS = "io.github.dixonsolutions.Gnosh"
-GNOSH_PATH = "/io/github/dixonsolutions/Gnosh"
+GNOSH_BUS = "io.github.exynos_linux.Gnosh"
+GNOSH_PATH = "/io/github/exynos_linux/Gnosh"
 EXT_BUS = "org.gnome.Shell.Extensions"
 EXT_PATH = "/org/gnome/Shell/Extensions"
 MIN_SHELL, MAX_SHELL = 45, 51

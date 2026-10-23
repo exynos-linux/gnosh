@@ -90,7 +90,7 @@ async function main(argv) {
 
     const extension = findExtension(uuid);
     const app = new Adw.Application({
-        application_id: 'io.github.dixonsolutions.Gnosh.Prefs',
+        application_id: 'io.github.exynos_linux.Gnosh.Prefs',
         flags: Gio.ApplicationFlags.NON_UNIQUE,
     });
 

@@ -2,7 +2,7 @@
 <h1>Documentation</h1>
 
 <h2 id="install">Installing</h2>
-<pre><code>curl -fsSL https://raw.githubusercontent.com/dixonSolutions/gnosh/main/setup.sh | sh   # latest release
+<pre><code>curl -fsSL https://raw.githubusercontent.com/exynos-linux/gnosh/main/setup.sh | sh   # latest release
 ./setup.sh                      # from a git checkout
 ./setup.sh --version 0.1.0      # a specific release
 ./setup.sh --no-extension-manager --no-gext --no-auto-update
@@ -75,4 +75,4 @@ podman build -t gnosh-test-pmos -f tests/container/Containerfile.pmos tests/cont
 tests/integration/run-nested.sh /tmp/out tests/integration/steps/official.sh
 tests/integration/container-run.sh tests/integration/test-setup.sh /tmp/out
 tests/integration/matrix.sh tests/cache/ext /tmp/matrix && tools/matrix-summary.py /tmp/matrix tests/cache/ext</code></pre>
-<p>While Phosh runs with <code>GNOSH_UNSAFE=1</code>, the D-Bus method <code>io.github.dixonsolutions.Gnosh.Eval</code> evaluates JavaScript in the shell (tests only; it is off by default).</p>
+<p>While Phosh runs with <code>GNOSH_UNSAFE=1</code>, the D-Bus method <code>io.github.exynos_linux.Gnosh.Eval</code> evaluates JavaScript in the shell (tests only; it is off by default).</p>

@@ -18,8 +18,8 @@ in GNOME, KDE or other desktops.
   <img src="site/img/prefs.png" width="240" alt="Clipboard Indicator preferences">
 </p>
 
-* Website and docs: <https://dixonsolutions.github.io/gnosh/>
-* Tested extensions: [compatibility matrix](https://dixonsolutions.github.io/gnosh/compatibility.html)
+* Website and docs: <https://exynos-linux.github.io/gnosh/>
+* Tested extensions: [compatibility matrix](https://exynos-linux.github.io/gnosh/compatibility.html)
   (generated from [`tests/results/extensions.json`](tests/results/extensions.json))
 
 ## Install
@@ -27,13 +27,13 @@ in GNOME, KDE or other desktops.
 From a Phosh session (or over ssh as the Phosh user):
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/dixonSolutions/gnosh/main/setup.sh | sh
+curl -fsSL https://raw.githubusercontent.com/exynos-linux/gnosh/main/setup.sh | sh
 ```
 
 or from git:
 
 ```sh
-git clone https://github.com/dixonSolutions/gnosh
+git clone https://github.com/exynos-linux/gnosh
 cd gnosh
 ./setup.sh
 ```
@@ -106,7 +106,7 @@ gnosh provides it:
  │  PhoshStatusPage · PhoshSystemModalDialog · Phosh notifications · OSD    │
  └──────────────────────────────────────────────────────────────────────────┘
         ▲ D-Bus: org.gnome.Shell.Extensions (Extension Manager, gext, gnome-extensions)
-        ▲ D-Bus: io.github.dixonsolutions.Gnosh (gnosh CLI)
+        ▲ D-Bus: io.github.exynos_linux.Gnosh (gnosh CLI)
 ```
 
 * **Inside Phosh, not next to it.** gnosh is a tiny GTK module, with no
@@ -146,7 +146,7 @@ gnosh provides it:
 
 ## What works, what doesn't
 
-See the **[compatibility matrix](https://dixonsolutions.github.io/gnosh/compatibility.html)**
+See the **[compatibility matrix](https://exynos-linux.github.io/gnosh/compatibility.html)**
 for every extension tested, with screenshots. In short:
 
 * **Works:** panel indicators with menus (System Monitor, Vitals, Freon,

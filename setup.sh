@@ -3,8 +3,8 @@
 #
 # gnosh installer: run GNOME Shell extensions in Phosh.
 #
-#   curl -fsSL https://raw.githubusercontent.com/dixonSolutions/gnosh/main/setup.sh | sh
-#   git clone https://github.com/dixonSolutions/gnosh && cd gnosh && ./setup.sh
+#   curl -fsSL https://raw.githubusercontent.com/exynos-linux/gnosh/main/setup.sh | sh
+#   git clone https://github.com/exynos-linux/gnosh && cd gnosh && ./setup.sh
 #
 # Installs for the current user only (~/.local, ~/.config, flatpak --user);
 # nothing needs root, so it also works on immutable systems.
@@ -22,7 +22,7 @@
 
 set -eu
 
-REPO="dixonSolutions/gnosh"
+REPO="exynos-linux/gnosh"
 PREFIX="${GNOSH_PREFIX:-$HOME/.local}"
 DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
 CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"

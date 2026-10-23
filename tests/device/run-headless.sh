@@ -65,7 +65,7 @@ echo "== gnosh doctor"; gnosh doctor
 echo "== gnosh install $INSTALL"; gnosh install $INSTALL
 sleep 8
 echo "== gnosh list"; gnosh list -v --enabled
-call() { m=$1; shift; gdbus call --session --dest io.github.dixonsolutions.Gnosh --object-path /io/github/dixonsolutions/Gnosh --method "io.github.dixonsolutions.Gnosh.$m" "$@"; }
+call() { m=$1; shift; gdbus call --session --dest io.github.exynos_linux.Gnosh --object-path /io/github/exynos_linux/Gnosh --method "io.github.exynos_linux.Gnosh.$m" "$@"; }
 shot() {
     if command -v grim >/dev/null; then WAYLAND_DISPLAY=$(ls "$XDG_RUNTIME_DIR" | grep '^wayland-[0-9]*$' | head -n1) grim "$OUT/$1.png"
     else gdbus call --session --dest org.gnome.Shell.Screenshot --object-path /org/gnome/Shell/Screenshot \

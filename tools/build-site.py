@@ -33,9 +33,9 @@ LAYOUT = """<!doctype html>
 {content}
 </main>
 <footer><div class="inner">
-  gnosh {version} · <a href="https://github.com/dixonSolutions/gnosh">GitHub</a> ·
-  <a href="https://github.com/dixonSolutions/gnosh/releases">Releases</a> ·
-  <a href="https://github.com/dixonSolutions/gnosh/issues">Issues</a> ·
+  gnosh {version} · <a href="https://github.com/exynos-linux/gnosh">GitHub</a> ·
+  <a href="https://github.com/exynos-linux/gnosh/releases">Releases</a> ·
+  <a href="https://github.com/exynos-linux/gnosh/issues">Issues</a> ·
   GPL-3.0-or-later · includes code from GNOME Shell (GPL-2.0-or-later)
 </div></footer>
 </body>
@@ -144,7 +144,7 @@ def main():
         for key, value in values.items():
             body = body.replace("{{" + key + "}}", value)
         nav = " ".join(f"<a href='{n}'{' class=\"active\"' if n == name else ''}>{lbl}</a>" for n, lbl in PAGES)
-        nav += " <a href='https://github.com/dixonSolutions/gnosh'>GitHub</a>"
+        nav += " <a href='https://github.com/exynos-linux/gnosh'>GitHub</a>"
         (out / name).write_text(LAYOUT.format(title=esc(title), nav=nav, content=body, version=esc(version)))
 
     shutil.copy(SITE / "style.css", out / "style.css")

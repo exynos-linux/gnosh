@@ -61,9 +61,9 @@ phoc_pid=$!
 
 gnosh() {
     method=$1; shift
-    timeout 20 gdbus call --session --dest io.github.dixonsolutions.Gnosh \
-        --object-path /io/github/dixonsolutions/Gnosh \
-        --method "io.github.dixonsolutions.Gnosh.$method" "$@"
+    timeout 20 gdbus call --session --dest io.github.exynos_linux.Gnosh \
+        --object-path /io/github/exynos_linux/Gnosh \
+        --method "io.github.exynos_linux.Gnosh.$method" "$@"
 }
 shot() { WAYLAND_DISPLAY=wayland-0 grim "$OUT/$1.png" 2>/dev/null || echo "screenshot $1 failed"; }
 status() { gnosh GetStatus > "$OUT/${1:-status}.txt" 2>&1 || echo "gnosh did not answer" >> "$OUT/${1:-status}.txt"; }

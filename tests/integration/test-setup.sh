@@ -19,7 +19,7 @@ export PATH="$HOME/.local/bin:$PATH"
 
 echo "== setup.sh ($SETUP_SOURCE) as $(id -un), home $HOME"
 if [ "${SETUP_SOURCE:-git}" = release ]; then
-    curl -fsSL https://raw.githubusercontent.com/dixonSolutions/gnosh/main/setup.sh |
+    curl -fsSL https://raw.githubusercontent.com/exynos-linux/gnosh/main/setup.sh |
         sh -s -- --no-extension-manager --no-auto-update 2>&1 | tee "$OUT/setup.log"
 else
     sh /gnosh/setup.sh --no-extension-manager --no-auto-update 2>&1 | tee "$OUT/setup.log"
@@ -55,12 +55,12 @@ sleep 6
 echo "== gnosh list"; gnosh list -v
 echo "== gext list"; gext list 2>&1 | head -20 || true
 echo "== gnosh search"; gnosh search clipboard -n 3 || true
-gdbus call --session --dest io.github.dixonsolutions.Gnosh --object-path /io/github/dixonsolutions/Gnosh \
-    --method io.github.dixonsolutions.Gnosh.Unfold >/dev/null
+gdbus call --session --dest io.github.exynos_linux.Gnosh --object-path /io/github/exynos_linux/Gnosh \
+    --method io.github.exynos_linux.Gnosh.Unfold >/dev/null
 sleep 2
 WAYLAND_DISPLAY=wayland-0 grim "$OUT/setup-drawer.png"
-gdbus call --session --dest io.github.dixonsolutions.Gnosh --object-path /io/github/dixonsolutions/Gnosh \
-    --method io.github.dixonsolutions.Gnosh.GetStatus > "$OUT/status.txt"
+gdbus call --session --dest io.github.exynos_linux.Gnosh --object-path /io/github/exynos_linux/Gnosh \
+    --method io.github.exynos_linux.Gnosh.GetStatus > "$OUT/status.txt"
 kill \$pid
 SESSION
 chmod +x /tmp/session.sh
