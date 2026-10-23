@@ -19,7 +19,9 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq shellcheck gjs gir1.2-gtk-3.0 python3
       - name: shellcheck
-        run: shellcheck -s sh setup.sh tests/integration/*.sh tests/integration/steps/*.sh tests/device/*.sh tools/*.sh
+        run: |
+          shellcheck -s sh setup.sh tests/integration/run-nested.sh tests/integration/run-phosh.sh tests/integration/test-setup.sh tests/integration/matrix.sh tests/integration/steps/*.sh tests/device/*.sh tools/*.sh
+          shellcheck -s bash tests/integration/container-run.sh
       - name: Python syntax
         run: python3 -m py_compile bin/gnosh
       - name: JS syntax
